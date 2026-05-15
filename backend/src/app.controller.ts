@@ -55,6 +55,17 @@ export class AppController {
     return this.data.latest(projectId);
   }
 
+  @Get('locations/nearby')
+  async nearby(
+    @Query('longitude') longitude?: string,
+    @Query('latitude') latitude?: string,
+    @Query('radiusMeters') radiusMeters?: string,
+    @Query('projectId') projectId?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.data.nearby({ longitude, latitude, radiusMeters, projectId, limit });
+  }
+
   @Get('devices/:id/track')
   async deviceTrack(@Param('id') deviceId: string, @Query('projectId') projectId?: string) {
     return this.data.track(deviceId, projectId);

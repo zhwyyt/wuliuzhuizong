@@ -45,11 +45,17 @@ The backend now supports two runtime persistence modes:
 - Local JSON mode stores runtime data at `backend/data/runtime.json` when database configuration is absent.
 - Automated tests run against memory-only state.
 
-The intended production persistence upgrade remains PostgreSQL + PostGIS:
+Spatial query API:
 
-- Store location geometry as `geography(Point, 4326)`.
+- `GET /api/locations/nearby` accepts `longitude`, `latitude`, optional `radiusMeters`, optional `projectId`, and optional `limit`.
+- PostgreSQL/PostGIS mode uses `ST_DWithin` and the `wuliu_locations.geog` GiST index against each Android device's latest point.
+- JSON/test mode uses the same latest-point semantics with Haversine distance calculation.
+
+The next persistence upgrade is to expand spatial business logic:
+
+- Add geofence tables and alert rules.
 - Index by `device_id`, `project_id`, and timestamp.
-- Use spatial indexes for project distribution and large-screen aggregation.
+- Use spatial indexes for route corridor checks and large-screen aggregation.
 
 ## Map Strategy
 

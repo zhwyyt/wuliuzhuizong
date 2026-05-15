@@ -58,6 +58,10 @@ export interface LatestLocation extends LocationPoint {
   owner: string;
 }
 
+export interface NearbyLocation extends LatestLocation {
+  distanceMeters: number;
+}
+
 export interface LocationInput {
   projectId?: string;
   deviceId?: string;

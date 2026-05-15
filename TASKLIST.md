@@ -30,4 +30,5 @@
 - [x] Add PostgreSQL runtime persistence.
 - [x] Add optional PostGIS geography columns and spatial indexes.
 - [x] Install PostGIS extension in local PostgreSQL and verify spatial index creation.
-- [ ] Add spatial query APIs using the PostGIS geography index.
+- [x] Add spatial nearby query API using the PostGIS geography index.
+- [ ] Add geofence and route-deviation APIs using PostGIS.

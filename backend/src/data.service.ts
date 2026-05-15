@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { Pool } from 'pg';
-import { Device, DeviceStatus, LatestLocation, LocationInput, LocationPoint, Project, User } from './domain';
+import { Device, DeviceStatus, LatestLocation, LocationInput, LocationPoint, NearbyLocation, Project, User } from './domain';
 
 const now = () => new Date().toISOString();
 const toNumber = (value: number | string | undefined, field: string): number => {
@@ -16,6 +16,18 @@ const toNumber = (value: number | string | undefined, field: string): number => 
 const toIso = (value: Date | string | null | undefined): string | undefined => {
   if (value === null || value === undefined) return undefined;
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+};
+
+const DEFAULT_NEARBY_RADIUS_METERS = 5_000;
+const DEFAULT_NEARBY_LIMIT = 50;
+const EARTH_RADIUS_METERS = 6_371_000;
+
+type NearbyInput = {
+  longitude?: number | string;
+  latitude?: number | string;
+  radiusMeters?: number | string;
+  projectId?: string;
+  limit?: number | string;
 };
 
 interface DataState {
@@ -66,6 +78,13 @@ type LocationRow = {
   captured_at: Date | string;
   received_at: Date | string;
   timestamp: Date | string;
+};
+
+type NearbyLocationRow = LocationRow & {
+  project_name?: string | null;
+  device_name?: string | null;
+  owner?: string | null;
+  distance_meters: number;
 };
 
 @Injectable()
@@ -374,6 +393,96 @@ export class DataService {
       deviceName: row.device_name ?? '未知设备',
       owner: row.owner ?? '未知人员',
     }));
+  }
+
+  async nearby(input: NearbyInput): Promise<NearbyLocation[]> {
+    const longitude = toNumber(input.longitude, 'longitude');
+    const latitude = toNumber(input.latitude, 'latitude');
+    this.assertCoordinateRange(longitude, latitude);
+    const radiusMeters = input.radiusMeters === undefined ? DEFAULT_NEARBY_RADIUS_METERS : toNumber(input.radiusMeters, 'radiusMeters');
+    const limit = input.limit === undefined ? DEFAULT_NEARBY_LIMIT : Math.trunc(toNumber(input.limit, 'limit'));
+    if (radiusMeters <= 0) {
+      throw new BadRequestException('radiusMeters must be greater than 0');
+    }
+    if (limit <= 0 || limit > 500) {
+      throw new BadRequestException('limit must be between 1 and 500');
+    }
+
+    if (!this.pool) {
+      return (await this.latest(input.projectId))
+        .map((point) => ({
+          ...point,
+          distanceMeters: this.distanceMeters(latitude, longitude, point.latitude, point.longitude),
+        }))
+        .filter((point) => point.distanceMeters <= radiusMeters)
+        .sort((a, b) => a.distanceMeters - b.distanceMeters)
+        .slice(0, limit)
+        .map((point) => ({ ...point, distanceMeters: Math.round(point.distanceMeters) }));
+    }
+
+    await this.ready;
+    if (this.postgisReady) {
+      const params: Array<string | number> = [longitude, latitude, radiusMeters, limit];
+      if (input.projectId) params.push(input.projectId);
+      const result = await this.pool.query<NearbyLocationRow>(
+        `
+        with origin as (
+          select ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography as geog
+        ),
+        ranked as (
+          select l.*, row_number() over (partition by l.device_id order by l.timestamp desc, l.received_at desc) as rank
+          from wuliu_locations l
+          where l.source = 'android'
+          ${input.projectId ? 'and l.project_id = $5' : ''}
+        )
+        select ranked.*, p.name as project_name, d.name as device_name, d.owner as owner,
+               ST_Distance(ranked.geog, origin.geog)::double precision as distance_meters
+        from ranked
+        cross join origin
+        left join wuliu_projects p on p.id = ranked.project_id
+        left join wuliu_devices d on d.id = ranked.device_id
+        where ranked.rank = 1
+          and ranked.geog is not null
+          and ST_DWithin(ranked.geog, origin.geog, $3)
+        order by distance_meters asc
+        limit $4
+        `,
+        params,
+      );
+      return result.rows.map((row) => this.nearbyFromRow(row));
+    }
+
+    const params: Array<string | number> = [longitude, latitude, radiusMeters, limit];
+    if (input.projectId) params.push(input.projectId);
+    const result = await this.pool.query<NearbyLocationRow>(
+      `
+      with ranked as (
+        select l.*, row_number() over (partition by l.device_id order by l.timestamp desc, l.received_at desc) as rank
+        from wuliu_locations l
+        where l.source = 'android'
+        ${input.projectId ? 'and l.project_id = $5' : ''}
+      ),
+      measured as (
+        select ranked.*, p.name as project_name, d.name as device_name, d.owner as owner,
+               6371000 * 2 * asin(sqrt(least(1,
+                 power(sin(radians((ranked.latitude - $2) / 2)), 2) +
+                 cos(radians($2)) * cos(radians(ranked.latitude)) *
+                 power(sin(radians((ranked.longitude - $1) / 2)), 2)
+               ))) as distance_meters
+        from ranked
+        left join wuliu_projects p on p.id = ranked.project_id
+        left join wuliu_devices d on d.id = ranked.device_id
+        where ranked.rank = 1
+      )
+      select *
+      from measured
+      where distance_meters <= $3
+      order by distance_meters asc
+      limit $4
+      `,
+      params,
+    );
+    return result.rows.map((row) => this.nearbyFromRow(row));
   }
 
   async track(deviceId: string, projectId?: string): Promise<LocationPoint[]> {
@@ -739,6 +848,16 @@ export class DataService {
     };
   }
 
+  private nearbyFromRow(row: NearbyLocationRow): NearbyLocation {
+    return {
+      ...this.locationFromRow(row),
+      projectName: row.project_name ?? '未知项目',
+      deviceName: row.device_name ?? '未知设备',
+      owner: row.owner ?? '未知人员',
+      distanceMeters: Math.round(Number(row.distance_meters)),
+    };
+  }
+
   private point(deviceId: string, longitude: number, latitude: number, speed: number, heading: number, status: DeviceStatus, minutesOffset: number): LocationPoint {
     const device = this.devices.find((item) => item.id === deviceId);
     if (!device) {
@@ -773,5 +892,30 @@ export class DataService {
       deviceName: device?.name ?? '未知设备',
       owner: device?.owner ?? '未知人员',
     };
+  }
+
+  private assertCoordinateRange(longitude: number, latitude: number): void {
+    if (longitude < -180 || longitude > 180) {
+      throw new BadRequestException('longitude must be between -180 and 180');
+    }
+    if (latitude < -90 || latitude > 90) {
+      throw new BadRequestException('latitude must be between -90 and 90');
+    }
+  }
+
+  private distanceMeters(fromLatitude: number, fromLongitude: number, toLatitude: number, toLongitude: number): number {
+    const fromLatRad = this.toRadians(fromLatitude);
+    const toLatRad = this.toRadians(toLatitude);
+    const deltaLat = this.toRadians(toLatitude - fromLatitude);
+    const deltaLng = this.toRadians(toLongitude - fromLongitude);
+    const a =
+      Math.sin(deltaLat / 2) ** 2 +
+      Math.cos(fromLatRad) * Math.cos(toLatRad) * Math.sin(deltaLng / 2) ** 2;
+    const clamped = Math.min(1, a);
+    return EARTH_RADIUS_METERS * 2 * Math.atan2(Math.sqrt(clamped), Math.sqrt(1 - clamped));
+  }
+
+  private toRadians(value: number): number {
+    return (value * Math.PI) / 180;
   }
 }

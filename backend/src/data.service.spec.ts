@@ -94,6 +94,62 @@ test('track returns timestamp-sorted points for one device', async () => {
   assert.ok(track.every((point) => point.deviceId === 'd-1001'));
 });
 
+test('nearby returns latest device locations ordered by distance', async () => {
+  const service = new DataService();
+
+  await service.ingestLocation({
+    projectId: 'p-shanghai',
+    deviceId: 'd-nearby-1',
+    deviceName: '附近测试手机 1',
+    longitude: 120.1569,
+    latitude: 30.7964,
+    appVersion: '0.2.0',
+    capturedAt: '2026-05-15T06:00:00.000Z',
+  });
+  await service.ingestLocation({
+    projectId: 'p-shanghai',
+    deviceId: 'd-nearby-2',
+    deviceName: '附近测试手机 2',
+    longitude: 120.18,
+    latitude: 30.81,
+    appVersion: '0.2.0',
+    capturedAt: '2026-05-15T06:01:00.000Z',
+  });
+  await service.ingestLocation({
+    projectId: 'p-hangzhou',
+    deviceId: 'd-nearby-hz',
+    deviceName: '杭州测试手机',
+    longitude: 120.1551,
+    latitude: 30.2741,
+    appVersion: '0.2.0',
+    capturedAt: '2026-05-15T06:02:00.000Z',
+  });
+
+  const nearby = await service.nearby({ longitude: 120.1569, latitude: 30.7964, radiusMeters: 5_000 });
+
+  assert.deepEqual(nearby.map((point) => point.deviceId), ['d-nearby-1', 'd-nearby-2']);
+  assert.equal(nearby[0].distanceMeters, 0);
+  assert.ok(nearby[1].distanceMeters > nearby[0].distanceMeters);
+});
+
+test('nearby supports project filtering and validates query bounds', async () => {
+  const service = new DataService();
+
+  await service.ingestLocation({
+    projectId: 'p-shanghai',
+    deviceId: 'd-nearby-project',
+    deviceName: '上海附近测试手机',
+    longitude: 120.1569,
+    latitude: 30.7964,
+    appVersion: '0.2.0',
+  });
+
+  assert.equal((await service.nearby({ longitude: 120.1569, latitude: 30.7964, radiusMeters: 500, projectId: 'p-hangzhou' })).length, 0);
+  await assert.rejects(() => service.nearby({ longitude: 181, latitude: 30.7964 }), BadRequestException);
+  await assert.rejects(() => service.nearby({ longitude: 120.1569, latitude: 30.7964, radiusMeters: 0 }), BadRequestException);
+  await assert.rejects(() => service.nearby({ longitude: 120.1569, latitude: 30.7964, limit: 501 }), BadRequestException);
+});
+
 test('ingestLocation creates unknown Android devices from payload metadata', async () => {
   const service = new DataService();
 

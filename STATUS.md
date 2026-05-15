@@ -32,6 +32,7 @@ Superpowers MVP plan is complete. Phase 7 productionization has started with loc
 - Verified Android Gradle `assembleDebug`.
 - Added PostgreSQL runtime persistence with automatic database/table initialization using `wuliu_*` tables.
 - Added optional PostGIS initialization for geography point storage and GiST indexing when the extension is installed.
+- Added `/api/locations/nearby` for distance-filtered latest device lookup backed by PostGIS `ST_DWithin`.
 - Added local JSON persistence fallback at `backend/data/runtime.json`; tests continue to use memory-only state.
 - Verified PostgreSQL connection to the configured `wms` database and API location ingest/latest-location smoke checks.
 - Started local dev services successfully with backend on `http://localhost:4000/api` and Web on `http://127.0.0.1:5175`.
@@ -52,5 +53,5 @@ Superpowers MVP plan is complete. Phase 7 productionization has started with loc
 
 ## Next Steps
 
-- Start implementing spatial query APIs on top of the PostGIS geography index.
+- Add geofence and route-deviation APIs on top of the PostGIS geography index.
 - Add real authentication, project permissions, and device upload credentials.
