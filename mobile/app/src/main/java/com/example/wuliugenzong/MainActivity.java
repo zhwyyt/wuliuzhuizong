@@ -22,6 +22,9 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 
 public class MainActivity extends Activity {
     private static final int LOCATION_PERMISSION = 1001;
@@ -29,7 +32,9 @@ public class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private TextView statusView;
     private EditText apiBaseInput;
+    private EditText projectIdInput;
     private EditText deviceIdInput;
+    private EditText deviceNameInput;
     private LocationManager locationManager;
     private Location lastLocation;
 
@@ -72,16 +77,33 @@ public class MainActivity extends Activity {
         apiBaseInput.setText("http://10.0.2.2:4000/api");
         root.addView(apiBaseInput, fullWidth());
 
+        projectIdInput = new EditText(this);
+        projectIdInput.setHint("项目 ID");
+        projectIdInput.setSingleLine(true);
+        projectIdInput.setText("p-shanghai");
+        root.addView(projectIdInput, fullWidth());
+
         deviceIdInput = new EditText(this);
         deviceIdInput.setHint("设备 ID");
         deviceIdInput.setSingleLine(true);
         deviceIdInput.setText("d-1001");
         root.addView(deviceIdInput, fullWidth());
 
+        deviceNameInput = new EditText(this);
+        deviceNameInput.setHint("设备名称");
+        deviceNameInput.setSingleLine(true);
+        deviceNameInput.setText("Android 测试手机");
+        root.addView(deviceNameInput, fullWidth());
+
         Button startButton = new Button(this);
         startButton.setText("开始定位上报");
         startButton.setOnClickListener(v -> startCollecting());
         root.addView(startButton, fullWidth());
+
+        Button stopButton = new Button(this);
+        stopButton.setText("停止定时上报");
+        stopButton.setOnClickListener(v -> stopCollecting());
+        root.addView(stopButton, fullWidth());
 
         Button onceButton = new Button(this);
         onceButton.setText("立即上报一次");
@@ -121,6 +143,27 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void stopCollecting() {
+        handler.removeCallbacks(uploadLoop);
+        if (locationManager != null) {
+            locationManager.removeUpdates(locationListener);
+        }
+        statusView.setText("已停止定时上报。");
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == LOCATION_PERMISSION) {
+            boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            if (granted) {
+                statusView.setText("定位权限已授权，请再次点击开始定位上报。");
+            } else {
+                statusView.setText("定位权限未授权，当前只能使用演示坐标上报。");
+            }
+        }
+    }
+
     private final LocationListener locationListener = location -> {
         lastLocation = location;
         statusView.setText("最新定位：" + location.getLongitude() + ", " + location.getLatitude());
@@ -141,12 +184,17 @@ public class MainActivity extends Activity {
     private void postLocation(Location location) {
         try {
             JSONObject body = new JSONObject();
+            body.put("projectId", projectIdInput.getText().toString().trim());
             body.put("deviceId", deviceIdInput.getText().toString().trim());
-            body.put("lng", location.getLongitude());
-            body.put("lat", location.getLatitude());
+            body.put("deviceName", deviceNameInput.getText().toString().trim());
+            body.put("longitude", location.getLongitude());
+            body.put("latitude", location.getLatitude());
             body.put("speed", Math.max(0, location.getSpeed() * 3.6));
             body.put("heading", location.hasBearing() ? location.getBearing() : 0);
+            body.put("battery", JSONObject.NULL);
+            body.put("source", "android");
             body.put("status", "online");
+            body.put("capturedAt", new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(new Date()));
 
             URL url = new URL(apiBaseInput.getText().toString().trim() + "/locations");
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();

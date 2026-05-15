@@ -49,6 +49,18 @@ npm run dev
 5. 真机调试时把 App 内后端地址改为电脑局域网 IP，例如 `http://192.168.1.10:4000/api`。
 6. 点击“开始定位上报”或“立即上报一次”。
 
+## Android Studio Verification
+
+Open `mobile/` in Android Studio.
+
+Use these default values for emulator testing:
+
+- Backend address: `http://10.0.2.2:4000/api`
+- Project ID: `p-shanghai`
+- Device ID: `d-1001`
+
+For a physical Android phone on the same LAN, replace `10.0.2.2` with the computer's LAN IP address and keep port `4000`.
+
 ## AMap Key
 
 The Web app runs without an AMap key. In that mode it shows the built-in coordinate fallback map.
