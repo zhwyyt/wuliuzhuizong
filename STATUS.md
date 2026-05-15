@@ -35,6 +35,7 @@ Superpowers MVP plan is complete. Phase 7 productionization has started with loc
 - Added `/api/locations/nearby` for distance-filtered latest device lookup backed by PostGIS `ST_DWithin`.
 - Added circle geofence APIs for creating/listing fences and querying latest devices inside a fence.
 - Added geofence alert events on Android uploads and route-deviation detection APIs.
+- Added Web management surfaces for geofence creation, alert triage, and route-deviation checks.
 - Added local JSON persistence fallback at `backend/data/runtime.json`; tests continue to use memory-only state.
 - Verified PostgreSQL connection to the configured `wms` database and API location ingest/latest-location smoke checks.
 - Started local dev services successfully with backend on `http://localhost:4000/api` and Web on `http://127.0.0.1:5175`.
@@ -51,9 +52,9 @@ Superpowers MVP plan is complete. Phase 7 productionization has started with loc
 
 - Current local PostgreSQL storage keeps scalar longitude/latitude columns and a PostGIS geography column/index for spatial queries.
 - 高德地图 production usage requires a valid API key configured by the deployer.
-- In-app browser verification timed out twice in the current shell; frontend was verified by build, lint, dev server HTTP 200, and backend smoke checks.
+- In-app browser verification timed out repeatedly in the current shell; frontend was verified by build, lint, dev server HTTP 200, and backend smoke checks.
 
 ## Next Steps
 
-- Add Web management surfaces for geofences, alert triage, and saved route corridors.
+- Add saved route corridor persistence and route assignment workflow.
 - Add real authentication, project permissions, and device upload credentials.

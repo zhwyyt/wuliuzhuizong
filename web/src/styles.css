@@ -13,7 +13,7 @@ body {
   margin: 0;
 }
 
-button, input, select {
+button, input, select, textarea {
   font: inherit;
 }
 
@@ -61,7 +61,7 @@ label {
   color: #536171;
 }
 
-input, select {
+input, select, textarea {
   min-height: 40px;
   border: 1px solid #c9d4da;
   border-radius: 6px;
@@ -69,7 +69,13 @@ input, select {
   background: #fff;
 }
 
-.login-panel button, .panel-title button, .inline-form button {
+textarea {
+  min-height: 96px;
+  resize: vertical;
+  padding: 10px 12px;
+}
+
+.login-panel button, .panel-title button, .inline-form button, .route-form button {
   min-height: 40px;
   display: inline-flex;
   align-items: center;
@@ -228,7 +234,7 @@ input, select {
   grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
 }
 
-.device-list, .track-list {
+.device-list, .track-list, .fence-list, .alert-list {
   display: grid;
   gap: 8px;
   max-height: 250px;
@@ -236,7 +242,7 @@ input, select {
   margin-bottom: 14px;
 }
 
-.device-row, .track-row {
+.device-row, .track-row, .fence-row, .alert-row {
   min-height: 46px;
   display: grid;
   grid-template-columns: 0.7fr 1fr auto;
@@ -249,13 +255,44 @@ input, select {
   text-align: left;
 }
 
-.device-row span, .track-row span, .muted {
+.device-row span, .track-row span, .fence-row span, .alert-row span, .muted {
   color: #677781;
 }
 
-.badge, .track-row em {
+.badge, .track-row em, .fence-row em, .alert-row em, .route-result em {
   font-style: normal;
   font-size: 13px;
+}
+
+.geofence-form {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+}
+
+.route-panel {
+  grid-column: span 2;
+}
+
+.route-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 160px auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.route-result {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid #cfe0da;
+  border-radius: 6px;
+  background: #f1f8f5;
+}
+
+.route-result strong {
+  color: #0f7660;
 }
 
 .badge {
@@ -424,8 +461,12 @@ input, select {
     padding: 12px;
   }
 
-  .inline-form, .device-row, .track-row, .screen-stats {
+  .inline-form, .geofence-form, .route-form, .device-row, .track-row, .fence-row, .alert-row, .screen-stats {
     grid-template-columns: 1fr;
+  }
+
+  .route-panel {
+    grid-column: auto;
   }
 
   .map-shell, .screen-page .map-shell {

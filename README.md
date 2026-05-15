@@ -55,6 +55,8 @@ Copy-Item backend/.env.example backend/.env
 - 单项目筛选。
 - 大屏总览页。
 - 基础轨迹回放。
+- 电子围栏创建与告警事件查看。
+- 路线偏离检测。
 - WebSocket 位置更新推送。
 
 ## Android Studio 运行方式
@@ -156,4 +158,4 @@ The current Android app uses AMap location first and falls back to system locati
 - 增加 Web 端围栏/告警管理界面和更完整的权限模型。
 - 接入高德 Web JS API 和 Android 高德定位 SDK。
 - 增加后台保活、定位服务通知和 Android 任务管理。
-- 增加项目成员角色、告警规则、电子围栏和报表。
+- 增加项目成员角色、路线分配、告警处置流和报表。

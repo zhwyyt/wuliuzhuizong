@@ -24,7 +24,7 @@
 - [x] Run local verification.
 - [x] Document run addresses, completed scope, gaps, and next phase.
 - [x] Complete Android Studio build verification.
-- [ ] Complete manual browser click-through verification if in-app browser automation is available.
+- [ ] Complete manual browser click-through verification when in-app browser automation is stable.
 - [x] Start Superpowers phase 7 productionization.
 - [x] Add local persistent runtime data store.
 - [x] Add PostgreSQL runtime persistence.
@@ -33,4 +33,5 @@
 - [x] Add spatial nearby query API using the PostGIS geography index.
 - [x] Add geofence create/list/evaluate APIs using PostGIS.
 - [x] Add geofence alert events and route-deviation APIs using PostGIS.
-- [ ] Add Web geofence, alert triage, and saved route corridor management surfaces.
+- [x] Add Web geofence, alert triage, and route-deviation check surfaces.
+- [ ] Add saved route corridor persistence and route assignment workflow.

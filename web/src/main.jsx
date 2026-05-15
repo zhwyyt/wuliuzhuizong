@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { io } from 'socket.io-client';
-import { Activity, AlertTriangle, BarChart3, Building2, Crosshair, LogIn, MapPin, MonitorUp, Plus, Radio, Route, Smartphone } from 'lucide-react';
+import { Activity, AlertTriangle, BarChart3, Building2, Crosshair, LocateFixed, LogIn, MapPin, MonitorUp, Plus, Radio, Route, ShieldCheck, Smartphone } from 'lucide-react';
 import { api, realtimeUrl } from './api/client';
 import './styles.css';
 
@@ -168,11 +168,17 @@ function Login({ onLogin }) {
 function ConsolePage({ data, selectedProject, setSelectedProject, onRefresh }) {
   const [projectForm, setProjectForm] = useState({ name: '', region: '', description: '' });
   const [deviceForm, setDeviceForm] = useState({ name: '', owner: '', phone: '' });
+  const [geofenceForm, setGeofenceForm] = useState({ name: '', longitude: '120.1569', latitude: '30.7964', radiusMeters: '1000' });
   const [trackDevice, setTrackDevice] = useState('d-1001');
   const [track, setTrack] = useState([]);
+  const [routeText, setRouteText] = useState('120.1569,30.7964\n120.1580,30.7970');
+  const [routeTolerance, setRouteTolerance] = useState('200');
+  const [routeResult, setRouteResult] = useState(null);
 
   const filteredLatest = selectedProject ? data.latest.filter((point) => point.projectId === selectedProject) : data.latest;
   const filteredDevices = selectedProject ? data.devices.filter((device) => device.projectId === selectedProject) : data.devices;
+  const filteredGeofences = selectedProject ? data.geofences.filter((geofence) => geofence.projectId === selectedProject) : data.geofences;
+  const filteredAlerts = selectedProject ? data.alerts.filter((alert) => alert.projectId === selectedProject) : data.alerts;
 
   async function addProject(event) {
     event.preventDefault();
@@ -188,10 +194,37 @@ function ConsolePage({ data, selectedProject, setSelectedProject, onRefresh }) {
     onRefresh();
   }
 
+  async function addGeofence(event) {
+    event.preventDefault();
+    await api.createGeofence({ ...geofenceForm, projectId: selectedProject || data.projects[0]?.id });
+    setGeofenceForm({ name: '', longitude: '120.1569', latitude: '30.7964', radiusMeters: '1000' });
+    onRefresh();
+  }
+
   async function loadTrack(deviceId = trackDevice) {
     if (!deviceId) return;
     setTrackDevice(deviceId);
     setTrack(await api.track(deviceId, selectedProject));
+  }
+
+  async function checkRoute(event) {
+    event.preventDefault();
+    const route = routeText
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [longitude, latitude] = line.split(',').map((item) => item.trim());
+        return { longitude, latitude };
+      });
+    const deviceId = trackDevice || filteredDevices[0]?.id || data.devices[0]?.id;
+    if (!deviceId) return;
+    setRouteResult(await api.routeDeviation({
+      projectId: selectedProject || undefined,
+      deviceId,
+      toleranceMeters: routeTolerance,
+      route,
+    }));
   }
 
   async function simulateUpload() {
@@ -270,6 +303,61 @@ function ConsolePage({ data, selectedProject, setSelectedProject, onRefresh }) {
           )) : <p className="muted">点击设备加载历史轨迹。</p>}
         </div>
       </section>
+
+      <section className="panel">
+        <div className="panel-title"><h2><ShieldCheck size={20} /> 电子围栏</h2></div>
+        <div className="fence-list">
+          {filteredGeofences.length ? filteredGeofences.map((geofence) => (
+            <div key={geofence.id} className="fence-row">
+              <strong>{geofence.name}</strong>
+              <span>{geofence.longitude.toFixed(4)}, {geofence.latitude.toFixed(4)}</span>
+              <em>{Math.round(geofence.radiusMeters)}m</em>
+            </div>
+          )) : <p className="muted">暂无电子围栏。</p>}
+        </div>
+        <form className="inline-form geofence-form" onSubmit={addGeofence}>
+          <input placeholder="围栏名称" value={geofenceForm.name} onChange={(e) => setGeofenceForm({ ...geofenceForm, name: e.target.value })} />
+          <input placeholder="经度" value={geofenceForm.longitude} onChange={(e) => setGeofenceForm({ ...geofenceForm, longitude: e.target.value })} />
+          <input placeholder="纬度" value={geofenceForm.latitude} onChange={(e) => setGeofenceForm({ ...geofenceForm, latitude: e.target.value })} />
+          <input placeholder="半径米" value={geofenceForm.radiusMeters} onChange={(e) => setGeofenceForm({ ...geofenceForm, radiusMeters: e.target.value })} />
+          <button><Plus size={16} /> 新建</button>
+        </form>
+      </section>
+
+      <section className="panel">
+        <div className="panel-title"><h2><AlertTriangle size={20} /> 告警事件</h2></div>
+        <div className="alert-list">
+          {filteredAlerts.length ? filteredAlerts.map((alert) => (
+            <div key={alert.id} className="alert-row">
+              <strong>{alert.geofenceName}</strong>
+              <span>{alert.deviceId}</span>
+              <em>{alert.distanceMeters}m</em>
+            </div>
+          )) : <p className="muted">暂无告警事件。</p>}
+        </div>
+      </section>
+
+      <section className="panel route-panel">
+        <div className="panel-title"><h2><LocateFixed size={20} /> 路线偏离</h2></div>
+        <form className="route-form" onSubmit={checkRoute}>
+          <label>
+            路线坐标
+            <textarea value={routeText} onChange={(event) => setRouteText(event.target.value)} />
+          </label>
+          <label>
+            容差米
+            <input value={routeTolerance} onChange={(event) => setRouteTolerance(event.target.value)} />
+          </label>
+          <button><Route size={16} /> 检测</button>
+        </form>
+        {routeResult && (
+          <div className="route-result">
+            <span>检查 {routeResult.checkedPoints} 点</span>
+            <strong>{routeResult.deviatedPoints.length} 个偏离</strong>
+            <em>最远 {routeResult.maxDistanceMeters}m</em>
+          </div>
+        )}
+      </section>
     </div>
   );
 }
@@ -317,18 +405,20 @@ function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('console');
   const [selectedProject, setSelectedProject] = useState('');
-  const [data, setData] = useState({ projects: [], devices: [], latest: [], overview: {} });
+  const [data, setData] = useState({ projects: [], devices: [], latest: [], overview: {}, geofences: [], alerts: [] });
   const [error, setError] = useState('');
 
   const refresh = useCallback(async (projectId = selectedProject) => {
     try {
-      const [projects, devices, latest, overview] = await Promise.all([
+      const [projects, devices, latest, overview, geofences, alerts] = await Promise.all([
         api.projects(),
         api.devices(),
         api.latest(projectId),
         api.overview(projectId),
+        api.geofences(projectId),
+        api.alerts({ projectId, limit: 50 }),
       ]);
-      setData({ projects, devices, latest, overview });
+      setData({ projects, devices, latest, overview, geofences, alerts });
       setError('');
     } catch (err) {
       setError(err.message);

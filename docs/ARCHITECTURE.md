@@ -37,6 +37,16 @@ REST is the default API style:
 - `GET /api/tracks`
 - `GET /api/overview`
 
+## Web Console
+
+- Project filtering.
+- Device/person management.
+- Live location map with built-in fallback and optional AMap JS SDK mode.
+- Track replay.
+- Geofence creation and alert triage.
+- Route deviation checks from route corridor input.
+- Simulated App upload.
+
 WebSocket namespace:
 
 - `/realtime`
@@ -62,7 +72,7 @@ Spatial query API:
 
 The next persistence upgrade is to expand spatial business logic:
 
-- Add Web management surfaces for geofences, alert triage, and saved route corridors.
+- Add saved route corridor persistence and route assignment workflow.
 - Index by `device_id`, `project_id`, and timestamp.
 - Use spatial indexes for route corridor checks and large-screen aggregation.
 

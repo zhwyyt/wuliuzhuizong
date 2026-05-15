@@ -25,6 +25,17 @@ export const api = {
   track: (deviceId, projectId) => request(`/devices/${deviceId}/track${projectId ? `?projectId=${projectId}` : ''}`),
   overview: (projectId) => request(`/overview${projectId ? `?projectId=${projectId}` : ''}`),
   ingestLocation: (point) => request('/locations', { method: 'POST', body: JSON.stringify(point) }),
+  geofences: (projectId) => request(`/geofences${projectId ? `?projectId=${projectId}` : ''}`),
+  createGeofence: (geofence) => request('/geofences', { method: 'POST', body: JSON.stringify(geofence) }),
+  alerts: ({ projectId, deviceId, limit } = {}) => {
+    const params = new URLSearchParams();
+    if (projectId) params.set('projectId', projectId);
+    if (deviceId) params.set('deviceId', deviceId);
+    if (limit) params.set('limit', limit);
+    const query = params.toString();
+    return request(`/alerts${query ? `?${query}` : ''}`);
+  },
+  routeDeviation: (input) => request('/routes/deviation', { method: 'POST', body: JSON.stringify(input) }),
 };
 
 export const realtimeUrl = (import.meta.env.VITE_API_BASE || 'http://localhost:4000/api').replace('/api', '/realtime');
