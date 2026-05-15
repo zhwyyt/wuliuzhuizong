@@ -34,6 +34,7 @@ Superpowers MVP plan is complete. Phase 7 productionization has started with loc
 - Added optional PostGIS initialization for geography point storage and GiST indexing when the extension is installed.
 - Added `/api/locations/nearby` for distance-filtered latest device lookup backed by PostGIS `ST_DWithin`.
 - Added circle geofence APIs for creating/listing fences and querying latest devices inside a fence.
+- Added geofence alert events on Android uploads and route-deviation detection APIs.
 - Added local JSON persistence fallback at `backend/data/runtime.json`; tests continue to use memory-only state.
 - Verified PostgreSQL connection to the configured `wms` database and API location ingest/latest-location smoke checks.
 - Started local dev services successfully with backend on `http://localhost:4000/api` and Web on `http://127.0.0.1:5175`.
@@ -54,5 +55,5 @@ Superpowers MVP plan is complete. Phase 7 productionization has started with loc
 
 ## Next Steps
 
-- Add geofence alert events and route-deviation APIs on top of the PostGIS geography index.
+- Add Web management surfaces for geofences, alert triage, and saved route corridors.
 - Add real authentication, project permissions, and device upload credentials.

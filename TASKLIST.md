@@ -32,4 +32,5 @@
 - [x] Install PostGIS extension in local PostgreSQL and verify spatial index creation.
 - [x] Add spatial nearby query API using the PostGIS geography index.
 - [x] Add geofence create/list/evaluate APIs using PostGIS.
-- [ ] Add geofence alert events and route-deviation APIs using PostGIS.
+- [x] Add geofence alert events and route-deviation APIs using PostGIS.
+- [ ] Add Web geofence, alert triage, and saved route corridor management surfaces.

@@ -2,7 +2,23 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { Pool } from 'pg';
-import { Device, DeviceStatus, Geofence, GeofenceInput, LatestLocation, LocationInput, LocationPoint, NearbyLocation, Project, User } from './domain';
+import {
+  AlertEvent,
+  Device,
+  DeviceStatus,
+  Geofence,
+  GeofenceInput,
+  LatestLocation,
+  LocationInput,
+  LocationPoint,
+  NearbyLocation,
+  Project,
+  RouteDeviationInput,
+  RouteDeviationPoint,
+  RouteDeviationResult,
+  RoutePointInput,
+  User,
+} from './domain';
 
 const now = () => new Date().toISOString();
 const toNumber = (value: number | string | undefined, field: string): number => {
@@ -20,6 +36,8 @@ const toIso = (value: Date | string | null | undefined): string | undefined => {
 
 const DEFAULT_NEARBY_RADIUS_METERS = 5_000;
 const DEFAULT_NEARBY_LIMIT = 50;
+const DEFAULT_ALERT_LIMIT = 100;
+const DEFAULT_ROUTE_TOLERANCE_METERS = 150;
 const EARTH_RADIUS_METERS = 6_371_000;
 
 type NearbyInput = {
@@ -36,7 +54,14 @@ interface DataState {
   devices: Device[];
   locations: LocationPoint[];
   geofences: Geofence[];
+  alerts: AlertEvent[];
 }
+
+type AlertListInput = {
+  projectId?: string;
+  deviceId?: string;
+  limit?: number | string;
+};
 
 type ProjectRow = {
   id: string;
@@ -101,6 +126,21 @@ type NearbyLocationRow = LocationRow & {
   distance_meters: number;
 };
 
+type AlertEventRow = {
+  id: string;
+  type: AlertEvent['type'];
+  project_id: string;
+  device_id: string;
+  location_id: string;
+  geofence_id: string;
+  geofence_name: string;
+  longitude: number;
+  latitude: number;
+  distance_meters: number;
+  message: string;
+  created_at: Date | string;
+};
+
 @Injectable()
 export class DataService {
   private pool?: Pool;
@@ -131,6 +171,7 @@ export class DataService {
   ];
 
   private geofences: Geofence[] = [];
+  private alerts: AlertEvent[] = [];
 
   constructor() {
     if (this.shouldUsePostgres()) {
@@ -358,17 +399,20 @@ export class DataService {
         );
       }
       const project = await this.pool.query<{ name: string }>('select name from wuliu_projects where id = $1', [location.projectId]);
-      return {
+      const latest = {
         ...location,
         projectName: project.rows[0]?.name ?? '未知项目',
         deviceName: device.name,
         owner: device.owner,
       };
+      await this.evaluateGeofenceAlerts(location, device);
+      return latest;
     }
 
     device.status = status;
     device.lastSeenAt = receivedAt;
     this.locations.push(point);
+    await this.evaluateGeofenceAlerts(point, device);
     this.saveState();
     return this.toLatest(point);
   }
@@ -602,6 +646,85 @@ export class DataService {
     return { geofence, devices };
   }
 
+  async listAlerts(input: AlertListInput = {}): Promise<AlertEvent[]> {
+    const limit = input.limit === undefined ? DEFAULT_ALERT_LIMIT : Math.trunc(toNumber(input.limit, 'limit'));
+    if (limit <= 0 || limit > 500) {
+      throw new BadRequestException('limit must be between 1 and 500');
+    }
+
+    if (!this.pool) {
+      return this.alerts
+        .filter((event) => !input.projectId || event.projectId === input.projectId)
+        .filter((event) => !input.deviceId || event.deviceId === input.deviceId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, limit);
+    }
+
+    await this.ready;
+    const clauses: string[] = [];
+    const params: Array<string | number> = [];
+    if (input.projectId) {
+      params.push(input.projectId);
+      clauses.push(`project_id = $${params.length}`);
+    }
+    if (input.deviceId) {
+      params.push(input.deviceId);
+      clauses.push(`device_id = $${params.length}`);
+    }
+    params.push(limit);
+    const result = await this.pool.query<AlertEventRow>(
+      `
+      select *
+      from wuliu_alert_events
+      ${clauses.length ? `where ${clauses.join(' and ')}` : ''}
+      order by created_at desc
+      limit $${params.length}
+      `,
+      params,
+    );
+    return result.rows.map((row) => this.alertFromRow(row));
+  }
+
+  async routeDeviation(input: RouteDeviationInput): Promise<RouteDeviationResult> {
+    if (!input.deviceId?.trim()) {
+      throw new BadRequestException('deviceId is required');
+    }
+    const route = this.parseRoute(input.route);
+    const toleranceMeters = input.toleranceMeters === undefined ? DEFAULT_ROUTE_TOLERANCE_METERS : toNumber(input.toleranceMeters, 'toleranceMeters');
+    if (toleranceMeters <= 0) {
+      throw new BadRequestException('toleranceMeters must be greater than 0');
+    }
+
+    const track = await this.track(input.deviceId, input.projectId);
+    if (this.pool && this.postgisReady && track.length) {
+      const lineWkt = `SRID=4326;LINESTRING(${route.map((point) => `${point.longitude} ${point.latitude}`).join(',')})`;
+      const params = input.projectId ? [input.deviceId, input.projectId, lineWkt] : [input.deviceId, lineWkt];
+      const lineParam = input.projectId ? '$3' : '$2';
+      const result = await this.pool.query<LocationRow & { distance_meters: number }>(
+        `
+        select l.*, ST_Distance(l.geog, ST_GeogFromText(${lineParam}))::double precision as distance_meters
+        from wuliu_locations l
+        where l.source = 'android'
+          and l.device_id = $1
+          ${input.projectId ? 'and l.project_id = $2' : ''}
+        order by l.timestamp asc
+        `,
+        params,
+      );
+      const measured = result.rows.map((row) => ({
+        ...this.locationFromRow(row),
+        distanceMeters: Math.round(Number(row.distance_meters)),
+      }));
+      return this.toRouteDeviationResult(input.deviceId, input.projectId, toleranceMeters, measured);
+    }
+
+    const measured = track.map((point) => ({
+      ...point,
+      distanceMeters: Math.round(this.distanceToRouteMeters(point.latitude, point.longitude, route)),
+    }));
+    return this.toRouteDeviationResult(input.deviceId, input.projectId, toleranceMeters, measured);
+  }
+
   async track(deviceId: string, projectId?: string): Promise<LocationPoint[]> {
     if (!this.pool) {
       return this.visibleLocations()
@@ -742,11 +865,28 @@ export class DataService {
         created_at timestamptz not null
       );
 
+      create table if not exists wuliu_alert_events (
+        id text primary key,
+        type text not null,
+        project_id text not null references wuliu_projects(id),
+        device_id text not null references wuliu_devices(id),
+        location_id text not null references wuliu_locations(id),
+        geofence_id text not null references wuliu_geofences(id),
+        geofence_name text not null,
+        longitude double precision not null,
+        latitude double precision not null,
+        distance_meters double precision not null,
+        message text not null,
+        created_at timestamptz not null
+      );
+
       create index if not exists idx_wuliu_locations_device_timestamp on wuliu_locations(device_id, timestamp desc);
       create index if not exists idx_wuliu_locations_project_timestamp on wuliu_locations(project_id, timestamp desc);
       create index if not exists idx_wuliu_locations_source on wuliu_locations(source);
       create index if not exists idx_wuliu_devices_project on wuliu_devices(project_id);
       create index if not exists idx_wuliu_geofences_project on wuliu_geofences(project_id);
+      create index if not exists idx_wuliu_alert_events_project_created on wuliu_alert_events(project_id, created_at desc);
+      create index if not exists idx_wuliu_alert_events_device_created on wuliu_alert_events(device_id, created_at desc);
     `;
   }
 
@@ -899,6 +1039,7 @@ export class DataService {
       if (Array.isArray(parsed.devices)) this.devices = parsed.devices;
       if (Array.isArray(parsed.locations)) this.locations = parsed.locations;
       if (Array.isArray(parsed.geofences)) this.geofences = parsed.geofences;
+      if (Array.isArray(parsed.alerts)) this.alerts = parsed.alerts;
     } catch (error) {
       console.warn(`Could not load persisted data from ${file}:`, error);
     }
@@ -916,6 +1057,7 @@ export class DataService {
       devices: this.devices,
       locations: this.locations,
       geofences: this.geofences,
+      alerts: this.alerts,
     };
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(tempFile, JSON.stringify(state, null, 2), 'utf8');
@@ -1033,6 +1175,110 @@ export class DataService {
     };
   }
 
+  private alertFromRow(row: AlertEventRow): AlertEvent {
+    return {
+      id: row.id,
+      type: row.type,
+      projectId: row.project_id,
+      deviceId: row.device_id,
+      locationId: row.location_id,
+      geofenceId: row.geofence_id,
+      geofenceName: row.geofence_name,
+      longitude: Number(row.longitude),
+      latitude: Number(row.latitude),
+      distanceMeters: Math.round(Number(row.distance_meters)),
+      message: row.message,
+      createdAt: toIso(row.created_at) ?? now(),
+    };
+  }
+
+  private async evaluateGeofenceAlerts(point: LocationPoint, device: Device): Promise<void> {
+    if (point.source !== 'android') {
+      return;
+    }
+
+    if (this.pool) {
+      await this.ready;
+      if (!this.postgisReady) {
+        return;
+      }
+      const geofences = await this.pool.query<GeofenceRow & { distance_meters: number }>(
+        `
+        select gf.*, ST_Distance(gf.geog, l.geog)::double precision as distance_meters
+        from wuliu_geofences gf
+        join wuliu_locations l on l.id = $1
+        where gf.project_id = $2
+          and gf.status = 'active'
+          and gf.geog is not null
+          and l.geog is not null
+          and ST_DWithin(gf.geog, l.geog, gf.radius_meters)
+        order by distance_meters asc
+        `,
+        [point.id, point.projectId],
+      );
+      for (const geofence of geofences.rows) {
+        await this.insertAlertEvent(point, device, this.geofenceFromRow(geofence), Math.round(Number(geofence.distance_meters)));
+      }
+      return;
+    }
+
+    for (const geofence of this.geofences.filter((item) => item.projectId === point.projectId && item.status === 'active')) {
+      const distanceMeters = Math.round(this.distanceMeters(geofence.latitude, geofence.longitude, point.latitude, point.longitude));
+      if (distanceMeters <= geofence.radiusMeters) {
+        await this.insertAlertEvent(point, device, geofence, distanceMeters);
+      }
+    }
+  }
+
+  private async insertAlertEvent(point: LocationPoint, device: Device, geofence: Geofence, distanceMeters: number): Promise<AlertEvent> {
+    const event: AlertEvent = {
+      id: `alert-${Date.now()}-${point.id}-${geofence.id}`,
+      type: 'geofence_enter',
+      projectId: point.projectId,
+      deviceId: point.deviceId,
+      locationId: point.id,
+      geofenceId: geofence.id,
+      geofenceName: geofence.name,
+      longitude: point.longitude,
+      latitude: point.latitude,
+      distanceMeters,
+      message: `${device.name} entered ${geofence.name}`,
+      createdAt: now(),
+    };
+
+    if (this.pool) {
+      await this.pool.query(
+        `
+        insert into wuliu_alert_events (
+          id, type, project_id, device_id, location_id, geofence_id, geofence_name,
+          longitude, latitude, distance_meters, message, created_at
+        ) values (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+        )
+        on conflict (id) do nothing
+        `,
+        [
+          event.id,
+          event.type,
+          event.projectId,
+          event.deviceId,
+          event.locationId,
+          event.geofenceId,
+          event.geofenceName,
+          event.longitude,
+          event.latitude,
+          event.distanceMeters,
+          event.message,
+          event.createdAt,
+        ],
+      );
+      return event;
+    }
+
+    this.alerts.unshift(event);
+    return event;
+  }
+
   private point(deviceId: string, longitude: number, latitude: number, speed: number, heading: number, status: DeviceStatus, minutesOffset: number): LocationPoint {
     const device = this.devices.find((item) => item.id === deviceId);
     if (!device) {
@@ -1069,6 +1315,35 @@ export class DataService {
     };
   }
 
+  private parseRoute(route: RoutePointInput[] | undefined): Array<{ longitude: number; latitude: number }> {
+    if (!Array.isArray(route) || route.length < 2) {
+      throw new BadRequestException('route must include at least two points');
+    }
+    return route.map((point, index) => {
+      const longitude = toNumber(point.longitude ?? point.lng, `route[${index}].longitude`);
+      const latitude = toNumber(point.latitude ?? point.lat, `route[${index}].latitude`);
+      this.assertCoordinateRange(longitude, latitude);
+      return { longitude, latitude };
+    });
+  }
+
+  private toRouteDeviationResult(
+    deviceId: string,
+    projectId: string | undefined,
+    toleranceMeters: number,
+    measured: RouteDeviationPoint[],
+  ): RouteDeviationResult {
+    const deviatedPoints = measured.filter((point) => point.distanceMeters > toleranceMeters);
+    return {
+      deviceId,
+      projectId,
+      toleranceMeters,
+      checkedPoints: measured.length,
+      deviatedPoints,
+      maxDistanceMeters: measured.reduce((max, point) => Math.max(max, point.distanceMeters), 0),
+    };
+  }
+
   private assertCoordinateRange(longitude: number, latitude: number): void {
     if (longitude < -180 || longitude > 180) {
       throw new BadRequestException('longitude must be between -180 and 180');
@@ -1088,6 +1363,36 @@ export class DataService {
       Math.cos(fromLatRad) * Math.cos(toLatRad) * Math.sin(deltaLng / 2) ** 2;
     const clamped = Math.min(1, a);
     return EARTH_RADIUS_METERS * 2 * Math.atan2(Math.sqrt(clamped), Math.sqrt(1 - clamped));
+  }
+
+  private distanceToRouteMeters(latitude: number, longitude: number, route: Array<{ longitude: number; latitude: number }>): number {
+    let best = Number.POSITIVE_INFINITY;
+    for (let index = 0; index < route.length - 1; index += 1) {
+      best = Math.min(best, this.distanceToSegmentMeters(latitude, longitude, route[index], route[index + 1]));
+    }
+    return best;
+  }
+
+  private distanceToSegmentMeters(
+    latitude: number,
+    longitude: number,
+    start: { longitude: number; latitude: number },
+    end: { longitude: number; latitude: number },
+  ): number {
+    const referenceLatRad = this.toRadians(latitude);
+    const x = (point: { longitude: number; latitude: number }) => EARTH_RADIUS_METERS * this.toRadians(point.longitude - longitude) * Math.cos(referenceLatRad);
+    const y = (point: { longitude: number; latitude: number }) => EARTH_RADIUS_METERS * this.toRadians(point.latitude - latitude);
+    const ax = x(start);
+    const ay = y(start);
+    const bx = x(end);
+    const by = y(end);
+    const dx = bx - ax;
+    const dy = by - ay;
+    if (dx === 0 && dy === 0) {
+      return Math.hypot(ax, ay);
+    }
+    const projection = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / (dx * dx + dy * dy)));
+    return Math.hypot(ax + projection * dx, ay + projection * dy);
   }
 
   private toRadians(value: number): number {

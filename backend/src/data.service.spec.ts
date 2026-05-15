@@ -203,6 +203,105 @@ test('paused geofences return no devices and invalid geofence inputs are rejecte
   await assert.rejects(() => service.geofenceDevices('missing-geofence'), /Geofence not found/);
 });
 
+test('android location uploads create geofence alert events', async () => {
+  const service = new DataService();
+
+  const geofence = await service.createGeofence({
+    projectId: 'p-shanghai',
+    name: '告警测试围栏',
+    longitude: 120.1569,
+    latitude: 30.7964,
+    radiusMeters: 500,
+  });
+
+  await service.ingestLocation({
+    projectId: 'p-shanghai',
+    deviceId: 'd-alert-inside',
+    deviceName: '告警测试手机',
+    longitude: 120.1569,
+    latitude: 30.7964,
+    appVersion: '0.2.0',
+  });
+  await service.ingestLocation({
+    projectId: 'p-shanghai',
+    deviceId: 'd-alert-outside',
+    deviceName: '围栏外手机',
+    longitude: 120.25,
+    latitude: 30.9,
+    appVersion: '0.2.0',
+  });
+
+  const alerts = await service.listAlerts({ projectId: 'p-shanghai' });
+  assert.equal(alerts.length, 1);
+  assert.equal(alerts[0].type, 'geofence_enter');
+  assert.equal(alerts[0].geofenceId, geofence.id);
+  assert.equal(alerts[0].deviceId, 'd-alert-inside');
+  assert.equal(alerts[0].distanceMeters, 0);
+});
+
+test('routeDeviation reports points outside the route corridor', async () => {
+  const service = new DataService();
+
+  await service.ingestLocation({
+    projectId: 'p-shanghai',
+    deviceId: 'd-route-check',
+    deviceName: '路线偏离测试手机',
+    longitude: 120.1569,
+    latitude: 30.7964,
+    appVersion: '0.2.0',
+    capturedAt: '2026-05-15T06:00:00.000Z',
+  });
+  await service.ingestLocation({
+    projectId: 'p-shanghai',
+    deviceId: 'd-route-check',
+    longitude: 120.1574,
+    latitude: 30.7967,
+    appVersion: '0.2.0',
+    capturedAt: '2026-05-15T06:01:00.000Z',
+  });
+  await service.ingestLocation({
+    projectId: 'p-shanghai',
+    deviceId: 'd-route-check',
+    longitude: 120.18,
+    latitude: 30.83,
+    appVersion: '0.2.0',
+    capturedAt: '2026-05-15T06:02:00.000Z',
+  });
+
+  const result = await service.routeDeviation({
+    projectId: 'p-shanghai',
+    deviceId: 'd-route-check',
+    toleranceMeters: 200,
+    route: [
+      { longitude: 120.1569, latitude: 30.7964 },
+      { longitude: 120.158, latitude: 30.797 },
+    ],
+  });
+
+  assert.equal(result.checkedPoints, 3);
+  assert.equal(result.deviatedPoints.length, 1);
+  assert.equal(result.deviatedPoints[0].deviceId, 'd-route-check');
+  assert.ok(result.maxDistanceMeters > 200);
+});
+
+test('routeDeviation validates route input', async () => {
+  const service = new DataService();
+
+  await assert.rejects(() => service.routeDeviation({ route: [{ longitude: 120.1569, latitude: 30.7964 }] }), BadRequestException);
+  await assert.rejects(() => service.routeDeviation({ deviceId: 'd-route-check', route: [{ longitude: 120.1569, latitude: 30.7964 }] }), BadRequestException);
+  await assert.rejects(
+    () => service.routeDeviation({
+      deviceId: 'd-route-check',
+      toleranceMeters: 0,
+      route: [
+        { longitude: 120.1569, latitude: 30.7964 },
+        { longitude: 120.158, latitude: 30.797 },
+      ],
+    }),
+    BadRequestException,
+  );
+});
+
 test('ingestLocation creates unknown Android devices from payload metadata', async () => {
   const service = new DataService();
 

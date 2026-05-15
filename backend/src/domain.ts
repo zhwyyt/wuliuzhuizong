@@ -3,6 +3,7 @@ export type DeviceStatus = 'online' | 'idle' | 'offline' | 'alert';
 export type DeviceType = 'phone' | 'vehicle' | 'tracker';
 export type LocationSource = 'android' | 'web-simulator' | 'seed';
 export type GeofenceStatus = 'active' | 'paused';
+export type AlertEventType = 'geofence_enter';
 
 export interface User {
   id: string;
@@ -85,6 +86,48 @@ export interface GeofenceInput {
   lat?: number | string;
   radiusMeters?: number | string;
   status?: GeofenceStatus;
+}
+
+export interface AlertEvent {
+  id: string;
+  type: AlertEventType;
+  projectId: string;
+  deviceId: string;
+  locationId: string;
+  geofenceId: string;
+  geofenceName: string;
+  longitude: number;
+  latitude: number;
+  distanceMeters: number;
+  message: string;
+  createdAt: string;
+}
+
+export interface RoutePointInput {
+  longitude?: number | string;
+  latitude?: number | string;
+  lng?: number | string;
+  lat?: number | string;
+}
+
+export interface RouteDeviationInput {
+  deviceId?: string;
+  projectId?: string;
+  toleranceMeters?: number | string;
+  route?: RoutePointInput[];
+}
+
+export interface RouteDeviationPoint extends LocationPoint {
+  distanceMeters: number;
+}
+
+export interface RouteDeviationResult {
+  deviceId: string;
+  projectId?: string;
+  toleranceMeters: number;
+  checkedPoints: number;
+  deviatedPoints: RouteDeviationPoint[];
+  maxDistanceMeters: number;
 }
 
 export interface LocationInput {
