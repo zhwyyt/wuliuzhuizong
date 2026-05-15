@@ -1,23 +1,30 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { Device, DeviceStatus, LatestLocation, LocationPoint, Project, User } from './domain';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Device, DeviceStatus, LatestLocation, LocationInput, LocationPoint, Project, User } from './domain';
 
 const now = () => new Date().toISOString();
+const toNumber = (value: number | string | undefined, field: string): number => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    throw new BadRequestException(`${field} must be a valid number`);
+  }
+  return parsed;
+};
 
 @Injectable()
 export class DataService {
   private users: User[] = [{ id: 'u-admin', name: '调度管理员', role: 'admin' }];
 
   private projects: Project[] = [
-    { id: 'p-shanghai', name: '上海冷链配送', city: '上海', manager: '周经理', status: 'active', createdAt: now() },
-    { id: 'p-hangzhou', name: '杭州同城运输', city: '杭州', manager: '林经理', status: 'active', createdAt: now() },
-    { id: 'p-suzhou', name: '苏州仓配项目', city: '苏州', manager: '陈经理', status: 'paused', createdAt: now() },
+    { id: 'p-shanghai', name: '上海冷链配送', region: '上海', description: '市内冷链配送演示项目', status: 'active', createdAt: now() },
+    { id: 'p-hangzhou', name: '杭州同城运输', region: '杭州', description: '同城干线运输演示项目', status: 'active', createdAt: now() },
+    { id: 'p-suzhou', name: '苏州仓配项目', region: '苏州', description: '仓配一体化演示项目', status: 'paused', createdAt: now() },
   ];
 
   private devices: Device[] = [
-    { id: 'd-1001', projectId: 'p-shanghai', name: '沪A-手机-001', owner: '王师傅', phone: '13800000001', status: 'online' },
-    { id: 'd-1002', projectId: 'p-shanghai', name: '沪A-手机-002', owner: '李师傅', phone: '13800000002', status: 'alert' },
-    { id: 'd-2001', projectId: 'p-hangzhou', name: '浙A-手机-001', owner: '赵师傅', phone: '13800000003', status: 'online' },
-    { id: 'd-3001', projectId: 'p-suzhou', name: '苏E-手机-001', owner: '孙师傅', phone: '13800000004', status: 'idle' },
+    { id: 'd-1001', projectId: 'p-shanghai', name: '沪A-手机-001', type: 'phone', owner: '王师傅', phone: '13800000001', status: 'online' },
+    { id: 'd-1002', projectId: 'p-shanghai', name: '沪A-手机-002', type: 'phone', owner: '李师傅', phone: '13800000002', status: 'alert' },
+    { id: 'd-2001', projectId: 'p-hangzhou', name: '浙A-手机-001', type: 'phone', owner: '赵师傅', phone: '13800000003', status: 'online' },
+    { id: 'd-3001', projectId: 'p-suzhou', name: '苏E-手机-001', type: 'phone', owner: '孙师傅', phone: '13800000004', status: 'idle' },
   ];
 
   private locations: LocationPoint[] = [
@@ -48,8 +55,8 @@ export class DataService {
     const project: Project = {
       id: `p-${Date.now()}`,
       name: input.name?.trim() || '新建物流项目',
-      city: input.city?.trim() || '未设置',
-      manager: input.manager?.trim() || '未设置',
+      region: input.region?.trim() || '未设置',
+      description: input.description?.trim() || '',
       status: input.status ?? 'active',
       createdAt: now(),
     };
@@ -70,6 +77,7 @@ export class DataService {
       id: `d-${Date.now()}`,
       projectId,
       name: input.name?.trim() || '新手机设备',
+      type: input.type ?? 'phone',
       owner: input.owner?.trim() || '未绑定人员',
       phone: input.phone?.trim() || '',
       status: input.status ?? 'offline',
@@ -78,23 +86,39 @@ export class DataService {
     return device;
   }
 
-  ingestLocation(input: Partial<LocationPoint>): LatestLocation {
+  ingestLocation(input: LocationInput): LatestLocation {
     const device = this.devices.find((item) => item.id === input.deviceId);
     if (!device) {
       throw new NotFoundException('Device not found');
     }
+    if (input.projectId && input.projectId !== device.projectId) {
+      throw new BadRequestException('projectId does not match device project');
+    }
+
+    const longitude = toNumber(input.longitude ?? input.lng, 'longitude');
+    const latitude = toNumber(input.latitude ?? input.lat, 'latitude');
     const status = input.status ?? 'online';
+    const capturedAt = input.capturedAt || input.timestamp || now();
+    const receivedAt = now();
+
     device.status = status;
+    device.lastSeenAt = receivedAt;
     const point: LocationPoint = {
       id: `l-${Date.now()}`,
       projectId: device.projectId,
       deviceId: device.id,
-      lng: Number(input.lng),
-      lat: Number(input.lat),
+      longitude,
+      latitude,
+      lng: longitude,
+      lat: latitude,
       speed: Number(input.speed ?? 0),
       heading: Number(input.heading ?? 0),
+      battery: input.battery === undefined ? undefined : Number(input.battery),
+      source: input.source ?? 'android',
       status,
-      timestamp: input.timestamp || now(),
+      capturedAt,
+      receivedAt,
+      timestamp: capturedAt,
     };
     this.locations.push(point);
     return this.toLatest(point);
@@ -132,21 +156,28 @@ export class DataService {
     };
   }
 
-  private point(deviceId: string, lng: number, lat: number, speed: number, heading: number, status: DeviceStatus, minutesOffset: number): LocationPoint {
+  private point(deviceId: string, longitude: number, latitude: number, speed: number, heading: number, status: DeviceStatus, minutesOffset: number): LocationPoint {
     const device = this.devices.find((item) => item.id === deviceId);
     if (!device) {
       throw new Error(`Missing seed device ${deviceId}`);
     }
+    const timestamp = new Date(Date.now() + minutesOffset * 60_000).toISOString();
+    device.lastSeenAt = timestamp;
     return {
       id: `seed-${deviceId}-${minutesOffset}`,
       projectId: device.projectId,
       deviceId,
-      lng,
-      lat,
+      longitude,
+      latitude,
+      lng: longitude,
+      lat: latitude,
       speed,
       heading,
+      source: 'seed',
       status,
-      timestamp: new Date(Date.now() + minutesOffset * 60_000).toISOString(),
+      capturedAt: timestamp,
+      receivedAt: timestamp,
+      timestamp,
     };
   }
 

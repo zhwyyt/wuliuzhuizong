@@ -1,4 +1,7 @@
+export type ProjectStatus = 'active' | 'paused' | 'archived';
 export type DeviceStatus = 'online' | 'idle' | 'offline' | 'alert';
+export type DeviceType = 'phone' | 'vehicle' | 'tracker';
+export type LocationSource = 'android' | 'web-simulator' | 'seed';
 
 export interface User {
   id: string;
@@ -9,9 +12,9 @@ export interface User {
 export interface Project {
   id: string;
   name: string;
-  city: string;
-  manager: string;
-  status: 'active' | 'paused';
+  region: string;
+  description: string;
+  status: ProjectStatus;
   createdAt: string;
 }
 
@@ -19,20 +22,28 @@ export interface Device {
   id: string;
   projectId: string;
   name: string;
+  type: DeviceType;
   owner: string;
   phone: string;
   status: DeviceStatus;
+  lastSeenAt?: string;
 }
 
 export interface LocationPoint {
   id: string;
   projectId: string;
   deviceId: string;
+  longitude: number;
+  latitude: number;
   lng: number;
   lat: number;
   speed: number;
   heading: number;
+  battery?: number;
+  source: LocationSource;
   status: DeviceStatus;
+  capturedAt: string;
+  receivedAt: string;
   timestamp: string;
 }
 
@@ -40,4 +51,20 @@ export interface LatestLocation extends LocationPoint {
   projectName: string;
   deviceName: string;
   owner: string;
+}
+
+export interface LocationInput {
+  projectId?: string;
+  deviceId?: string;
+  longitude?: number | string;
+  latitude?: number | string;
+  lng?: number | string;
+  lat?: number | string;
+  speed?: number | string;
+  heading?: number | string;
+  battery?: number | string;
+  source?: LocationSource;
+  status?: DeviceStatus;
+  capturedAt?: string;
+  timestamp?: string;
 }

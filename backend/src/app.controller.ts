@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { DataService } from './data.service';
-import { Device, LocationPoint, Project } from './domain';
+import { Device, LocationInput, Project } from './domain';
 import { RealtimeGateway } from './realtime.gateway';
 
 @Controller()
@@ -44,7 +44,7 @@ export class AppController {
   }
 
   @Post('locations')
-  ingestLocation(@Body() body: Partial<LocationPoint>) {
+  ingestLocation(@Body() body: LocationInput) {
     const point = this.data.ingestLocation(body);
     this.realtime.publishLocation(point);
     return point;
@@ -53,6 +53,11 @@ export class AppController {
   @Get('locations/latest')
   latest(@Query('projectId') projectId?: string) {
     return this.data.latest(projectId);
+  }
+
+  @Get('devices/:id/track')
+  deviceTrack(@Param('id') deviceId: string, @Query('projectId') projectId?: string) {
+    return this.data.track(deviceId, projectId);
   }
 
   @Get('tracks')
