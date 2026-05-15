@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { io } from 'socket.io-client';
 import { Activity, AlertTriangle, BarChart3, Building2, Crosshair, LogIn, MapPin, MonitorUp, Plus, Radio, Route, Smartphone } from 'lucide-react';
@@ -24,8 +24,8 @@ function Stat({ label, value, tone = 'default' }) {
 }
 
 function MiniMap({ points, track = [], selectedProject }) {
-  const all = [...points, ...track];
   const bounds = useMemo(() => {
+    const all = [...points, ...track];
     if (!all.length) return { minLng: 119.8, maxLng: 121.8, minLat: 30, maxLat: 31.6 };
     return {
       minLng: Math.min(...all.map((p) => p.lng)) - 0.05,
@@ -33,7 +33,7 @@ function MiniMap({ points, track = [], selectedProject }) {
       minLat: Math.min(...all.map((p) => p.lat)) - 0.05,
       maxLat: Math.max(...all.map((p) => p.lat)) + 0.05,
     };
-  }, [all]);
+  }, [points, track]);
 
   const projectPoints = selectedProject ? points.filter((point) => point.projectId === selectedProject) : points;
   const projectTrack = selectedProject ? track.filter((point) => point.projectId === selectedProject) : track;
@@ -249,7 +249,7 @@ function App() {
   const [data, setData] = useState({ projects: [], devices: [], latest: [], overview: {} });
   const [error, setError] = useState('');
 
-  async function refresh(projectId = selectedProject) {
+  const refresh = useCallback(async (projectId = selectedProject) => {
     try {
       const [projects, devices, latest, overview] = await Promise.all([
         api.projects(),
@@ -262,22 +262,22 @@ function App() {
     } catch (err) {
       setError(err.message);
     }
-  }
+  }, [selectedProject]);
 
   useEffect(() => {
     if (user) refresh();
-  }, [user]);
+  }, [refresh, user]);
 
   useEffect(() => {
     if (user) refresh(selectedProject);
-  }, [selectedProject]);
+  }, [refresh, selectedProject, user]);
 
   useEffect(() => {
     if (!user) return undefined;
     const socket = io(realtimeUrl);
     socket.on('location:update', () => refresh());
     return () => socket.close();
-  }, [user, selectedProject]);
+  }, [refresh, user, selectedProject]);
 
   async function login(name) {
     const result = await api.login(name);
