@@ -81,7 +81,7 @@ public class MainActivity extends Activity {
         apiBaseInput = new EditText(this);
         apiBaseInput.setHint("后端地址");
         apiBaseInput.setSingleLine(true);
-        apiBaseInput.setText("http://10.0.2.2:4000/api");
+        apiBaseInput.setText("http://100.101.3.116:4000/api");
         root.addView(apiBaseInput, fullWidth());
 
         projectIdInput = new EditText(this);
@@ -118,7 +118,7 @@ public class MainActivity extends Activity {
         root.addView(onceButton, fullWidth());
 
         statusView = new TextView(this);
-        statusView.setText("待启动。模拟器访问宿主机后端使用 10.0.2.2。");
+        statusView.setText("待启动。真机默认通过 Tailscale 访问本机后端。");
         statusView.setTextSize(15);
         statusView.setPadding(0, 28, 0, 0);
         root.addView(statusView, fullWidth());

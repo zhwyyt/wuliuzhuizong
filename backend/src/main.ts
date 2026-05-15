@@ -10,8 +10,11 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   const port = Number(process.env.PORT ?? 4000);
-  await app.listen(port);
-  console.log(`Wuliugenzong API running on http://localhost:${port}/api`);
+  const host = process.env.HOST ?? '0.0.0.0';
+  await app.listen(port, host);
+  console.log(`Wuliugenzong API running on http://${host}:${port}/api`);
+  console.log(`Local health check: http://127.0.0.1:${port}/api/health`);
+  console.log(`Phone/Tailscale URL format: http://<computer-ip>:${port}/api`);
 }
 
 void bootstrap();

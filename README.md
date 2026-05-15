@@ -22,6 +22,7 @@ npm run dev
 - 大屏入口：登录后点击左侧“大屏”
 - 后端接口：http://localhost:4000/api
 - 健康检查：http://localhost:4000/api/health
+- 真机/Tailscale 后端地址格式：http://电脑IP:4000/api
 
 ## 演示账号
 
@@ -46,7 +47,7 @@ npm run dev
 2. 等待 Gradle Sync 完成。
 3. 启动后端服务。
 4. 模拟器默认后端地址使用 `http://10.0.2.2:4000/api`。
-5. 真机调试时把 App 内后端地址改为电脑局域网 IP，例如 `http://192.168.1.10:4000/api`。
+5. 真机调试时把 App 内后端地址改为电脑局域网 IP 或 Tailscale IP，例如 `http://192.168.1.10:4000/api` 或 `http://100.101.3.116:4000/api`。
 6. 点击“开始定位上报”或“立即上报一次”。
 
 ## Android Studio Verification
@@ -57,9 +58,23 @@ Use these default values for emulator testing:
 
 - Backend address: `http://10.0.2.2:4000/api`
 - Project ID: `p-shanghai`
-- Device ID: `d-1001`
+- Device ID: `d-android-001`
 
-For a physical Android phone on the same LAN, replace `10.0.2.2` with the computer's LAN IP address and keep port `4000`.
+For a physical Android phone on the same LAN or Tailscale network, replace `10.0.2.2` with the computer's LAN/Tailscale IP address and keep port `4000`.
+
+Example for Tailscale:
+
+```text
+http://100.101.3.116:4000/api
+```
+
+Before using the APK on a phone, open this health check in the phone browser:
+
+```text
+http://100.101.3.116:4000/api/health
+```
+
+If the health check opens, the APK can upload locations to the local backend through Tailscale.
 
 ## AMap Key
 
