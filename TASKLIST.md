@@ -6,8 +6,15 @@
 - [x] Restore missing Superpowers skill repository.
 - [x] Re-run official Superpowers brainstorming workflow.
 - [x] Write official Superpowers MVP design spec.
-- [ ] User review and approval of official design spec.
-- [ ] Write official Superpowers implementation plan from approved spec.
+- [x] User review and approval of official design spec.
+- [x] Write official Superpowers implementation plan from approved spec.
+- [ ] Choose official plan execution approach.
+- [ ] Execute backend contract alignment task.
+- [ ] Execute backend tests task.
+- [ ] Execute Web API and interaction alignment task.
+- [ ] Execute map fallback task.
+- [ ] Execute Android test app alignment task.
+- [ ] Execute end-to-end verification and memory update task.
 - [x] Design minimum viable architecture.
 - [x] Implement NestJS backend MVP.
 - [x] Implement React Web management console.

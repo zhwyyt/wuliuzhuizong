@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Official Superpowers brainstorming spec written; waiting for user review before writing the implementation plan.
+Official Superpowers implementation plan written; waiting for execution approach selection.
 
 ## Completed
 
@@ -15,6 +15,9 @@ Official Superpowers brainstorming spec written; waiting for user review before 
 - Completed official Superpowers brainstorming for the demoable logistics tracking MVP.
 - Wrote the official design spec at `docs/superpowers/specs/2026-05-15-logistics-tracking-mvp-design.md`.
 - Self-reviewed the design spec for placeholders, contradictions, scope drift, and ambiguity.
+- User approved the official Superpowers design spec.
+- Wrote the official implementation plan at `docs/superpowers/plans/2026-05-15-logistics-tracking-mvp-implementation-plan.md`.
+- Self-reviewed the implementation plan for spec coverage, placeholders, and type consistency.
 - Implemented NestJS API for login, projects, devices, location ingest, latest locations, tracks, and overview.
 - Implemented React Web console with project filtering, device management, live map, simulated App upload, and track replay.
 - Implemented big-screen overview page for all projects or one selected project.
@@ -23,7 +26,7 @@ Official Superpowers brainstorming spec written; waiting for user review before 
 
 ## In Progress
 
-- User review of the official Superpowers design spec.
+- Execution approach selection: subagent-driven implementation or inline execution.
 
 ## Blockers
 
@@ -40,5 +43,5 @@ Official Superpowers brainstorming spec written; waiting for user review before 
 
 ## Next Steps
 
-- After user approval of the written spec, run the official Superpowers `writing-plans` workflow.
-- Only then resume implementation or adjust the current scaffold.
+- Choose an execution approach for the official implementation plan.
+- Execute the official plan task by task.
