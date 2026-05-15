@@ -1,0 +1,30 @@
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000/api';
+
+async function request(path, options = {}) {
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
+
+  if (!response.ok) {
+    throw new Error(`API ${response.status}: ${await response.text()}`);
+  }
+  return response.json();
+}
+
+export const api = {
+  login: (name) => request('/auth/login', { method: 'POST', body: JSON.stringify({ name }) }),
+  projects: () => request('/projects'),
+  createProject: (project) => request('/projects', { method: 'POST', body: JSON.stringify(project) }),
+  devices: (projectId) => request(`/devices${projectId ? `?projectId=${projectId}` : ''}`),
+  createDevice: (device) => request('/devices', { method: 'POST', body: JSON.stringify(device) }),
+  latest: (projectId) => request(`/locations/latest${projectId ? `?projectId=${projectId}` : ''}`),
+  track: (deviceId, projectId) => request(`/tracks?deviceId=${deviceId}${projectId ? `&projectId=${projectId}` : ''}`),
+  overview: (projectId) => request(`/overview${projectId ? `?projectId=${projectId}` : ''}`),
+  ingestLocation: (point) => request('/locations', { method: 'POST', body: JSON.stringify(point) }),
+};
+
+export const realtimeUrl = (import.meta.env.VITE_API_BASE || 'http://localhost:4000/api').replace('/api', '/realtime');
