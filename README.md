@@ -27,6 +27,7 @@ npm run dev
 - 围栏内设备查询示例：http://localhost:4000/api/geofences/{id}/devices
 - 告警事件查询示例：http://localhost:4000/api/alerts?projectId=p-shanghai
 - 保存路线查询示例：http://localhost:4000/api/routes?projectId=p-shanghai
+- 设备路线分配接口：`PATCH /api/devices/{id}/route`
 - 路线偏离检测接口：`POST /api/routes/deviation`
 
 ## PostgreSQL 持久化
@@ -57,7 +58,7 @@ Copy-Item backend/.env.example backend/.env
 - 大屏总览页。
 - 基础轨迹回放。
 - 电子围栏创建与告警事件查看。
-- 保存路线走廊与路线偏离检测。
+- 保存路线走廊、设备路线分配与路线偏离检测。
 - WebSocket 位置更新推送。
 
 ## Android Studio 运行方式
@@ -150,7 +151,7 @@ The current Android app uses AMap location first and falls back to system locati
 - 后端 API smoke check：`/health`、`/projects`、`/locations/latest`、`POST /locations`、`/devices/d-1001/track`、`/overview`
 - Web dev server HTTP 200：`http://127.0.0.1:5175`
 - Android Gradle `assembleDebug`
-- PostgreSQL/PostGIS 模式 API smoke check：自动建库/建表、位置上报、最新位置查询、附近设备查询、电子围栏查询、围栏告警事件、保存路线走廊、路线偏离检测
+- PostgreSQL/PostGIS 模式 API smoke check：自动建库/建表、位置上报、最新位置查询、附近设备查询、电子围栏查询、围栏告警事件、保存路线走廊、设备路线分配、路线偏离检测
 
 测试环境会自动使用内存仓库；如果本地临时需要禁用落盘，可以设置 `WULIU_DATA_FILE=memory`。
 
@@ -159,4 +160,4 @@ The current Android app uses AMap location first and falls back to system locati
 - 增加 Web 端围栏/告警管理界面和更完整的权限模型。
 - 接入高德 Web JS API 和 Android 高德定位 SDK。
 - 增加后台保活、定位服务通知和 Android 任务管理。
-- 增加项目成员角色、路线分配流程、告警处置流和报表。
+- 增加项目成员角色、告警处置流和报表。

@@ -255,6 +255,10 @@ textarea {
   text-align: left;
 }
 
+.device-row {
+  grid-template-columns: 0.7fr 1fr minmax(96px, 0.8fr) auto;
+}
+
 .device-row span, .track-row span, .fence-row span, .alert-row span, .muted {
   color: #677781;
 }
@@ -281,7 +285,7 @@ textarea {
 
 .route-saved-row {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) auto;
+  grid-template-columns: 220px minmax(0, 1fr) auto auto;
   gap: 12px;
   margin-bottom: 12px;
 }

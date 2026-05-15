@@ -21,6 +21,7 @@ export const api = {
   createProject: (project) => request('/projects', { method: 'POST', body: JSON.stringify(project) }),
   devices: (projectId) => request(`/devices${projectId ? `?projectId=${projectId}` : ''}`),
   createDevice: (device) => request('/devices', { method: 'POST', body: JSON.stringify(device) }),
+  assignDeviceRoute: (deviceId, routeId) => request(`/devices/${deviceId}/route`, { method: 'PATCH', body: JSON.stringify({ routeId }) }),
   latest: (projectId) => request(`/locations/latest${projectId ? `?projectId=${projectId}` : ''}`),
   track: (deviceId, projectId) => request(`/devices/${deviceId}/track${projectId ? `?projectId=${projectId}` : ''}`),
   overview: (projectId) => request(`/overview${projectId ? `?projectId=${projectId}` : ''}`),

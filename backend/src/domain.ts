@@ -29,6 +29,11 @@ export interface Device {
   phone: string;
   status: DeviceStatus;
   lastSeenAt?: string;
+  routeId?: string;
+}
+
+export interface DeviceRouteAssignmentInput {
+  routeId?: string | null;
 }
 
 export interface LocationPoint {

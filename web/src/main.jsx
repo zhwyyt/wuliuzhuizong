@@ -182,6 +182,7 @@ function ConsolePage({ data, selectedProject, setSelectedProject, onRefresh }) {
   const filteredGeofences = selectedProject ? data.geofences.filter((geofence) => geofence.projectId === selectedProject) : data.geofences;
   const filteredAlerts = selectedProject ? data.alerts.filter((alert) => alert.projectId === selectedProject) : data.alerts;
   const filteredRoutes = selectedProject ? data.routes.filter((route) => route.projectId === selectedProject) : data.routes;
+  const routeNameById = useMemo(() => new Map(data.routes.map((route) => [route.id, route.name])), [data.routes]);
 
   async function addProject(event) {
     event.preventDefault();
@@ -233,6 +234,13 @@ function ConsolePage({ data, selectedProject, setSelectedProject, onRefresh }) {
     });
     setRouteName('');
     setSelectedRouteId(route.id);
+    onRefresh();
+  }
+
+  async function assignRouteToDevice() {
+    const deviceId = trackDevice || filteredDevices[0]?.id || data.devices[0]?.id;
+    if (!deviceId) return;
+    await api.assignDeviceRoute(deviceId, selectedRouteId || null);
     onRefresh();
   }
 
@@ -296,6 +304,7 @@ function ConsolePage({ data, selectedProject, setSelectedProject, onRefresh }) {
             <button key={device.id} className="device-row" onClick={() => loadTrack(device.id)}>
               <span>{device.owner}</span>
               <strong>{device.name}</strong>
+              <span>{device.routeId ? routeNameById.get(device.routeId) || '已分配路线' : '未分配路线'}</span>
               <em className={`badge badge-${device.status}`}>{statusText[device.status]}</em>
             </button>
           ))}
@@ -363,6 +372,7 @@ function ConsolePage({ data, selectedProject, setSelectedProject, onRefresh }) {
           </select>
           <input placeholder="路线名称" value={routeName} onChange={(event) => setRouteName(event.target.value)} />
           <button type="button" onClick={saveRoute}><Plus size={16} /> 保存路线</button>
+          <button type="button" onClick={assignRouteToDevice}><Smartphone size={16} /> 分配设备</button>
         </div>
         <form className="route-form" onSubmit={checkRoute}>
           <label>

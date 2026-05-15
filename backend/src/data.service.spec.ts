@@ -358,6 +358,57 @@ test('paused route corridors cannot be used for deviation checks', async () => {
   await assert.rejects(() => service.routeDeviation({ deviceId: 'd-route-check', routeId: corridor.id }), /route corridor is paused/);
 });
 
+test('devices can be assigned to saved route corridors', async () => {
+  const service = new DataService();
+  const corridor = await service.createRouteCorridor({
+    projectId: 'p-shanghai',
+    name: '设备分配路线',
+    toleranceMeters: 120,
+    route: [
+      { longitude: 120.1569, latitude: 30.7964 },
+      { longitude: 120.158, latitude: 30.797 },
+    ],
+  });
+  const device = await service.createDevice({
+    projectId: 'p-shanghai',
+    name: '分配路线测试设备',
+    owner: '测试人员',
+  });
+  await service.ingestLocation({
+    projectId: 'p-shanghai',
+    deviceId: device.id,
+    longitude: 120.18,
+    latitude: 30.83,
+    appVersion: '0.2.0',
+  });
+
+  const assigned = await service.assignDeviceRoute(device.id, corridor.id);
+  assert.equal(assigned.routeId, corridor.id);
+
+  const result = await service.routeDeviation({ projectId: 'p-shanghai', deviceId: device.id });
+  assert.equal(result.routeId, corridor.id);
+  assert.equal(result.toleranceMeters, 120);
+  assert.equal(result.deviatedPoints.length, 1);
+
+  const cleared = await service.assignDeviceRoute(device.id, null);
+  assert.equal(cleared.routeId, undefined);
+  await assert.rejects(() => service.routeDeviation({ projectId: 'p-shanghai', deviceId: device.id }), /route or routeId is required/);
+});
+
+test('device route assignment validates project ownership', async () => {
+  const service = new DataService();
+  const route = await service.createRouteCorridor({
+    projectId: 'p-hangzhou',
+    route: [
+      { longitude: 120.1, latitude: 30.1 },
+      { longitude: 120.2, latitude: 30.2 },
+    ],
+  });
+  const device = await service.createDevice({ projectId: 'p-shanghai' });
+
+  await assert.rejects(() => service.assignDeviceRoute(device.id, route.id), /route projectId does not match device project/);
+});
+
 test('ingestLocation creates unknown Android devices from payload metadata', async () => {
   const service = new DataService();
 

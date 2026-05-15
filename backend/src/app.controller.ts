@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { DataService } from './data.service';
-import { Device, GeofenceInput, LocationInput, Project, RouteCorridorInput, RouteDeviationInput } from './domain';
+import { Device, DeviceRouteAssignmentInput, GeofenceInput, LocationInput, Project, RouteCorridorInput, RouteDeviationInput } from './domain';
 import { RealtimeGateway } from './realtime.gateway';
 
 @Controller()
@@ -41,6 +41,11 @@ export class AppController {
   @Post('devices')
   async createDevice(@Body() body: Partial<Device>) {
     return this.data.createDevice(body);
+  }
+
+  @Patch('devices/:id/route')
+  async assignDeviceRoute(@Param('id') id: string, @Body() body: DeviceRouteAssignmentInput) {
+    return this.data.assignDeviceRoute(id, body.routeId);
   }
 
   @Post('locations')

@@ -84,6 +84,7 @@ type DeviceRow = {
   phone: string;
   status: DeviceStatus;
   last_seen_at?: Date | string | null;
+  route_id?: string | null;
 };
 
 type LocationRow = {
@@ -309,18 +310,43 @@ export class DataService {
       owner: input.owner?.trim() || '未绑定人员',
       phone: input.phone?.trim() || '',
       status: input.status ?? 'offline',
+      routeId: input.routeId,
     };
 
     if (this.pool) {
       await this.ready;
       const result = await this.pool.query<DeviceRow>(
-        'insert into wuliu_devices (id, project_id, name, type, owner, phone, status) values ($1, $2, $3, $4, $5, $6, $7) returning *',
-        [device.id, device.projectId, device.name, device.type, device.owner, device.phone, device.status],
+        'insert into wuliu_devices (id, project_id, name, type, owner, phone, status, route_id) values ($1, $2, $3, $4, $5, $6, $7, $8) returning *',
+        [device.id, device.projectId, device.name, device.type, device.owner, device.phone, device.status, device.routeId ?? null],
       );
       return this.deviceFromRow(result.rows[0]);
     }
 
     this.devices.unshift(device);
+    this.saveState();
+    return device;
+  }
+
+  async assignDeviceRoute(deviceId: string, routeId?: string | null): Promise<Device> {
+    const device = await this.findDevice(deviceId);
+    const normalizedRouteId = routeId?.trim() || undefined;
+    if (normalizedRouteId) {
+      const corridor = await this.findRouteCorridor(normalizedRouteId);
+      if (corridor.projectId !== device.projectId) {
+        throw new BadRequestException('route projectId does not match device project');
+      }
+    }
+
+    if (this.pool) {
+      await this.ready;
+      const result = await this.pool.query<DeviceRow>(
+        'update wuliu_devices set route_id = $2 where id = $1 returning *',
+        [deviceId, normalizedRouteId ?? null],
+      );
+      return this.deviceFromRow(result.rows[0]);
+    }
+
+    device.routeId = normalizedRouteId;
     this.saveState();
     return device;
   }
@@ -703,7 +729,8 @@ export class DataService {
     if (!input.deviceId?.trim()) {
       throw new BadRequestException('deviceId is required');
     }
-    const corridor = input.routeId ? await this.findRouteCorridor(input.routeId) : undefined;
+    const routeId = input.routeId || (input.route ? undefined : (await this.findDevice(input.deviceId)).routeId);
+    const corridor = routeId ? await this.findRouteCorridor(routeId) : undefined;
     const route = input.route ? this.parseRoute(input.route) : this.routePointsForCalculation(corridor);
     const toleranceMeters = input.toleranceMeters === undefined
       ? (corridor?.toleranceMeters ?? DEFAULT_ROUTE_TOLERANCE_METERS)
@@ -732,14 +759,14 @@ export class DataService {
         ...this.locationFromRow(row),
         distanceMeters: Math.round(Number(row.distance_meters)),
       }));
-      return this.toRouteDeviationResult(input.deviceId, input.projectId, input.routeId, toleranceMeters, measured);
+      return this.toRouteDeviationResult(input.deviceId, input.projectId, routeId, toleranceMeters, measured);
     }
 
     const measured = track.map((point) => ({
       ...point,
       distanceMeters: Math.round(this.distanceToRouteMeters(point.latitude, point.longitude, route)),
     }));
-    return this.toRouteDeviationResult(input.deviceId, input.projectId, input.routeId, toleranceMeters, measured);
+    return this.toRouteDeviationResult(input.deviceId, input.projectId, routeId, toleranceMeters, measured);
   }
 
   async listRouteCorridors(projectId?: string): Promise<RouteCorridor[]> {
@@ -901,8 +928,12 @@ export class DataService {
         owner text not null,
         phone text not null default '',
         status text not null,
-        last_seen_at timestamptz
+        last_seen_at timestamptz,
+        route_id text
       );
+
+      alter table wuliu_devices
+      add column if not exists route_id text;
 
       create table if not exists wuliu_locations (
         id text primary key,
@@ -969,6 +1000,7 @@ export class DataService {
       create index if not exists idx_wuliu_locations_project_timestamp on wuliu_locations(project_id, timestamp desc);
       create index if not exists idx_wuliu_locations_source on wuliu_locations(source);
       create index if not exists idx_wuliu_devices_project on wuliu_devices(project_id);
+      create index if not exists idx_wuliu_devices_route on wuliu_devices(route_id);
       create index if not exists idx_wuliu_geofences_project on wuliu_geofences(project_id);
       create index if not exists idx_wuliu_alert_events_project_created on wuliu_alert_events(project_id, created_at desc);
       create index if not exists idx_wuliu_alert_events_device_created on wuliu_alert_events(device_id, created_at desc);
@@ -1193,6 +1225,7 @@ export class DataService {
       phone: row.phone,
       status: row.status,
       lastSeenAt: toIso(row.last_seen_at),
+      routeId: row.route_id ?? undefined,
     };
   }
 
@@ -1251,6 +1284,23 @@ export class DataService {
       throw new NotFoundException('Geofence not found');
     }
     return geofence;
+  }
+
+  private async findDevice(id: string): Promise<Device> {
+    if (this.pool) {
+      await this.ready;
+      const result = await this.pool.query<DeviceRow>('select * from wuliu_devices where id = $1', [id]);
+      if (!result.rows[0]) {
+        throw new NotFoundException('Device not found');
+      }
+      return this.deviceFromRow(result.rows[0]);
+    }
+
+    const device = this.devices.find((item) => item.id === id);
+    if (!device) {
+      throw new NotFoundException('Device not found');
+    }
+    return device;
   }
 
   private async findRouteCorridor(id: string): Promise<RouteCorridor> {
