@@ -94,6 +94,9 @@ export class DataService {
 
     const longitude = toNumber(input.longitude ?? input.lng, 'longitude');
     const latitude = toNumber(input.latitude ?? input.lat, 'latitude');
+    if (this.isKnownMockCoordinate(longitude, latitude)) {
+      throw new BadRequestException('mock location is not accepted');
+    }
     const status = input.status ?? 'online';
     const capturedAt = input.capturedAt || input.timestamp || now();
     const receivedAt = now();
@@ -119,6 +122,10 @@ export class DataService {
     };
     this.locations.push(point);
     return this.toLatest(point);
+  }
+
+  private isKnownMockCoordinate(longitude: number, latitude: number): boolean {
+    return Math.abs(longitude - -122.084) < 0.000001 && Math.abs(latitude - 37.421998333333335) < 0.000001;
   }
 
   private resolveIngestDevice(input: LocationInput): Device {

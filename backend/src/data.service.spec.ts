@@ -86,3 +86,18 @@ test('ingestLocation creates unknown Android devices from payload metadata', () 
   assert.equal(point.deviceName, 'Android 测试手机');
   assert.ok(service.listDevices('p-shanghai').some((device) => device.id === 'd-android-001'));
 });
+
+test('ingestLocation rejects known Android emulator mock coordinate', () => {
+  const service = new DataService();
+
+  assert.throws(
+    () => service.ingestLocation({
+      projectId: 'p-shanghai',
+      deviceId: 'd-android-001',
+      deviceName: 'Android 测试手机',
+      longitude: -122.084,
+      latitude: 37.421998333333335,
+    }),
+    BadRequestException,
+  );
+});

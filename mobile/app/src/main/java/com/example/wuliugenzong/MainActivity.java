@@ -6,6 +6,7 @@ import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -28,6 +29,7 @@ import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.TimeZone;
 
 public class MainActivity extends Activity {
     private static final int LOCATION_PERMISSION = 1001;
@@ -171,13 +173,17 @@ public class MainActivity extends Activity {
             boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
             if (granted) {
                 statusView.setText("定位权限已授权，请再次点击开始定位上报。");
-            } else {
-                statusView.setText("定位权限未授权，当前只能使用演示坐标上报。");
+        } else {
+                statusView.setText("定位权限未授权，无法上报真实位置。");
             }
         }
     }
 
     private final LocationListener locationListener = location -> {
+        if (isMockLocation(location)) {
+            statusView.setText("检测到模拟位置，已忽略。请关闭开发者选项里的模拟定位。");
+            return;
+        }
         lastLocation = location;
         statusView.setText("最新定位：" + location.getLongitude() + ", " + location.getLatitude());
     };
@@ -189,7 +195,7 @@ public class MainActivity extends Activity {
         option.setLocationMode(AMapLocationClientOption.AMapLocationMode.Hight_Accuracy);
         option.setInterval(10_000);
         option.setNeedAddress(false);
-        option.setMockEnable(true);
+        option.setMockEnable(false);
         amapLocationClient.setLocationOption(option);
         amapLocationClient.setLocationListener(location -> {
             if (location == null || location.getErrorCode() != 0) {
@@ -221,20 +227,35 @@ public class MainActivity extends Activity {
             locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 10_000, 10, locationListener);
             locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 10_000, 10, locationListener);
         } catch (SecurityException ignored) {
-            statusView.setText("系统定位也不可用，将使用演示坐标上报。");
+            statusView.setText("系统定位也不可用，无法上报真实位置。");
         }
     }
 
     private void uploadCurrentLocation() {
         Location location = lastLocation;
         if (location == null) {
-            location = new Location("demo");
-            location.setLongitude(121.4737 + Math.random() * 0.05);
-            location.setLatitude(31.2304 + Math.random() * 0.04);
-            location.setSpeed(12);
+            statusView.setText("尚未获取真实定位，暂不上报。请打开定位权限并等待定位成功。");
+            return;
+        }
+        if (isMockLocation(location)) {
+            statusView.setText("当前是模拟位置，已阻止上报。");
+            return;
         }
         Location uploadLocation = location;
         new Thread(() -> postLocation(uploadLocation)).start();
+    }
+
+    private boolean isMockLocation(Location location) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            return location.isMock();
+        }
+        return location.isFromMockProvider();
+    }
+
+    private String utcNow() {
+        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
+        format.setTimeZone(TimeZone.getTimeZone("UTC"));
+        return format.format(new Date());
     }
 
     private void postLocation(Location location) {
@@ -250,7 +271,7 @@ public class MainActivity extends Activity {
             body.put("battery", JSONObject.NULL);
             body.put("source", "android");
             body.put("status", "online");
-            body.put("capturedAt", new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(new Date()));
+            body.put("capturedAt", utcNow());
 
             URL url = new URL(apiBaseInput.getText().toString().trim() + "/locations");
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
