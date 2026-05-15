@@ -8,18 +8,20 @@
 - [x] Write official Superpowers MVP design spec.
 - [x] User review and approval of official design spec.
 - [x] Write official Superpowers implementation plan from approved spec.
-- [ ] Choose official plan execution approach.
-- [ ] Execute backend contract alignment task.
-- [ ] Execute backend tests task.
-- [ ] Execute Web API and interaction alignment task.
-- [ ] Execute map fallback task.
-- [ ] Execute Android test app alignment task.
-- [ ] Execute end-to-end verification and memory update task.
+- [x] Choose official plan execution approach.
+- [x] Execute backend contract alignment task.
+- [x] Execute backend tests task.
+- [x] Execute Web API and interaction alignment task.
+- [x] Execute map fallback task.
+- [x] Execute Android test app alignment task.
+- [x] Execute end-to-end verification and memory update task.
 - [x] Design minimum viable architecture.
 - [x] Implement NestJS backend MVP.
 - [x] Implement React Web management console.
 - [x] Implement big-screen overview page.
 - [x] Add Android Studio app skeleton.
 - [x] Wire demo data and location upload flow.
-- [ ] Run local verification.
-- [ ] Document run addresses, completed scope, gaps, and next phase.
+- [x] Run local verification.
+- [x] Document run addresses, completed scope, gaps, and next phase.
+- [ ] Complete Android Studio build verification.
+- [ ] Complete manual browser click-through verification if in-app browser automation is available.

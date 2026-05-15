@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Official Superpowers implementation plan written; waiting for execution approach selection.
+Approved Superpowers MVP plan implemented and locally verified, with Android Studio build verification remaining.
 
 ## Completed
 
@@ -23,25 +23,30 @@ Official Superpowers implementation plan written; waiting for execution approach
 - Implemented big-screen overview page for all projects or one selected project.
 - Added Android Studio native Android app skeleton for location upload.
 - Added README with local run and Android Studio instructions.
+- Executed the official Superpowers implementation plan inline.
+- Aligned backend API contracts with project/device/location spec fields.
+- Added backend repository tests for Android/Web location ingestion and tracks.
+- Aligned Web API usage, simulator payload, and map fallback configuration.
+- Aligned Android test collector payload, controls, and default project/device fields.
+- Verified `npm run build`, `npm test -w backend`, `npm run lint -w web`, and backend API smoke checks.
+- Started local dev services successfully with backend on `http://localhost:4000/api` and Web on `http://127.0.0.1:5175`.
 
 ## In Progress
 
-- Execution approach selection: subagent-driven implementation or inline execution.
+- Android Studio/Gradle verification remains to be completed outside this shell.
 
 ## Blockers
 
 - Android Studio/Android Gradle runtime is not verified in the current shell, so Android device verification may need to be completed from Android Studio.
-- The project directory is not currently a git repository, so the Superpowers brainstorming step requiring a spec commit could not be completed.
 - PostgreSQL/PostGIS service is not currently verified; MVP will use an in-memory repository first and include PostGIS-ready design notes.
 
 ## Risks
 
-- Initial code scaffolding was started before writing the requested brainstorming and plan documents; this has been corrected by adding durable planning outputs.
-- The earlier planning documents were written before the real Superpowers skills were restored, so the next implementation plan should be generated from the official spec instead.
 - In-memory storage is suitable for demo only and must be replaced with PostgreSQL/PostGIS before real use.
-- High德地图 production usage requires a valid API key configured by the deployer.
+- 高德地图 production usage requires a valid API key configured by the deployer.
+- In-app browser verification timed out twice in the current shell; frontend was verified by build, lint, dev server HTTP 200, and backend smoke checks.
 
 ## Next Steps
 
-- Choose an execution approach for the official implementation plan.
-- Execute the official plan task by task.
+- Complete Android Studio build and emulator/phone upload verification.
+- Use the running local Web app to do a manual click-through of login, simulated upload, track replay, and big-screen filtering.

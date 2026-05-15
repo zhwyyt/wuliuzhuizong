@@ -18,7 +18,7 @@ npm run dev
 
 默认地址：
 
-- Web 管理端：http://localhost:5174
+- Web 管理端：http://localhost:5175
 - 大屏入口：登录后点击左侧“大屏”
 - 后端接口：http://localhost:4000/api
 - 健康检查：http://localhost:4000/api/health
@@ -89,6 +89,16 @@ The current MVP only exposes the configuration surface and fallback behavior. Th
 - 后端使用内存数据，便于本地零依赖演示。
 - 地图以坐标画布展示实时点和轨迹，保留高德地图接入边界。
 - 权限模型为演示登录，后续需要接入真实账号、角色和项目权限。
+
+## 已验证
+
+- `npm run build`
+- `npm test -w backend`
+- `npm run lint -w web`（当前仍会提示单文件 demo 的 Fast Refresh warning）
+- 后端 API smoke check：`/health`、`/projects`、`/locations/latest`、`POST /locations`、`/devices/d-1001/track`、`/overview`
+- Web dev server HTTP 200：`http://127.0.0.1:5175`
+
+Android 编译需要在 Android Studio 或有 Gradle wrapper/Gradle CLI 的环境中完成；当前 shell 没有可用 Gradle 命令。
 
 ## 下一阶段建议
 
