@@ -49,6 +49,19 @@ npm run dev
 5. 真机调试时把 App 内后端地址改为电脑局域网 IP，例如 `http://192.168.1.10:4000/api`。
 6. 点击“开始定位上报”或“立即上报一次”。
 
+## AMap Key
+
+The Web app runs without an AMap key. In that mode it shows the built-in coordinate fallback map.
+
+To prepare for AMap integration, set this environment variable before starting the Web app:
+
+```powershell
+$env:VITE_AMAP_KEY="your-amap-web-js-key"
+npm run dev -w web
+```
+
+The current MVP only exposes the configuration surface and fallback behavior. The production AMap JS SDK layer is a follow-up task after the demo loop is verified.
+
 ## 目录结构
 
 - `backend/` NestJS REST API 和 WebSocket 推送。

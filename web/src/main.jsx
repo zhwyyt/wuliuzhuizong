@@ -5,6 +5,8 @@ import { Activity, AlertTriangle, BarChart3, Building2, Crosshair, LogIn, MapPin
 import { api, realtimeUrl } from './api/client';
 import './styles.css';
 
+const AMAP_KEY = import.meta.env.VITE_AMAP_KEY || '';
+
 const statusText = {
   online: '在线',
   idle: '空闲',
@@ -35,6 +37,7 @@ function MiniMap({ points, track = [], selectedProject }) {
 
   const projectPoints = selectedProject ? points.filter((point) => point.projectId === selectedProject) : points;
   const projectTrack = selectedProject ? track.filter((point) => point.projectId === selectedProject) : track;
+  const mapMode = AMAP_KEY ? 'AMap key configured' : 'Fallback coordinate map';
   const toXY = (point) => ({
     x: ((point.lng - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * 100,
     y: 100 - ((point.lat - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * 100,
@@ -48,7 +51,7 @@ function MiniMap({ points, track = [], selectedProject }) {
   return (
     <div className="map-shell">
       <div className="map-toolbar">
-        <span><MapPin size={16} /> 高德地图接入位</span>
+        <span><MapPin size={16} /> {mapMode}</span>
         <span>{projectPoints.length} 个实时点</span>
       </div>
       <svg className="map-canvas" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="实时位置地图">
@@ -66,7 +69,7 @@ function MiniMap({ points, track = [], selectedProject }) {
       </svg>
       <div className="map-legend">
         <span>坐标范围：华东演示数据</span>
-        <span>生产环境替换为 AMap JS SDK 图层</span>
+        <span>{AMAP_KEY ? '高德 Key 已配置，下一阶段接入 AMap JS SDK 图层' : '未配置 VITE_AMAP_KEY，当前使用内置坐标图层'}</span>
       </div>
     </div>
   );

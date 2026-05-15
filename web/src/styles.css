@@ -341,6 +341,14 @@ input, select {
   color: #c4dddc;
 }
 
+.map-toolbar span:first-child {
+  min-width: 210px;
+}
+
+.map-legend span:last-child {
+  text-align: right;
+}
+
 .screen-side {
   display: grid;
   gap: 12px;
