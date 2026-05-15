@@ -42,15 +42,15 @@ Superpowers MVP plan is complete. Phase 7 productionization has started with loc
 
 ## Blockers
 
-- PostgreSQL is verified locally. The local PostgreSQL server does not currently have the PostGIS extension installed, so the app is running scalar longitude/latitude storage.
+- PostgreSQL and PostGIS are verified locally. `wuliu_locations.geog` is enabled as `geography(Point, 4326)` with a GiST index.
 
 ## Risks
 
-- Current local PostgreSQL storage uses scalar longitude/latitude columns until PostGIS is installed on the server.
+- Current local PostgreSQL storage keeps scalar longitude/latitude columns and a PostGIS geography column/index for spatial queries.
 - 高德地图 production usage requires a valid API key configured by the deployer.
 - In-app browser verification timed out twice in the current shell; frontend was verified by build, lint, dev server HTTP 200, and backend smoke checks.
 
 ## Next Steps
 
-- Install PostGIS on the local PostgreSQL server and re-run backend startup to enable the geography column/index.
+- Start implementing spatial query APIs on top of the PostGIS geography index.
 - Add real authentication, project permissions, and device upload credentials.

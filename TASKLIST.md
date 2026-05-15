@@ -29,4 +29,5 @@
 - [x] Add local persistent runtime data store.
 - [x] Add PostgreSQL runtime persistence.
 - [x] Add optional PostGIS geography columns and spatial indexes.
-- [ ] Install PostGIS extension in local PostgreSQL and verify spatial index creation.
+- [x] Install PostGIS extension in local PostgreSQL and verify spatial index creation.
+- [ ] Add spatial query APIs using the PostGIS geography index.
