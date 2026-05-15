@@ -92,7 +92,7 @@ function Login({ onLogin }) {
 }
 
 function ConsolePage({ data, selectedProject, setSelectedProject, onRefresh }) {
-  const [projectForm, setProjectForm] = useState({ name: '', city: '', manager: '' });
+  const [projectForm, setProjectForm] = useState({ name: '', region: '', description: '' });
   const [deviceForm, setDeviceForm] = useState({ name: '', owner: '', phone: '' });
   const [trackDevice, setTrackDevice] = useState('d-1001');
   const [track, setTrack] = useState([]);
@@ -103,7 +103,7 @@ function ConsolePage({ data, selectedProject, setSelectedProject, onRefresh }) {
   async function addProject(event) {
     event.preventDefault();
     await api.createProject(projectForm);
-    setProjectForm({ name: '', city: '', manager: '' });
+    setProjectForm({ name: '', region: '', description: '' });
     onRefresh();
   }
 
@@ -125,12 +125,16 @@ function ConsolePage({ data, selectedProject, setSelectedProject, onRefresh }) {
     if (!device) return;
     const latest = data.latest.find((point) => point.deviceId === device.id);
     await api.ingestLocation({
+      projectId: device.projectId,
       deviceId: device.id,
-      lng: (latest?.lng ?? 121.47) + (Math.random() - 0.35) * 0.04,
-      lat: (latest?.lat ?? 31.23) + (Math.random() - 0.35) * 0.025,
+      longitude: (latest?.longitude ?? latest?.lng ?? 121.47) + (Math.random() - 0.35) * 0.04,
+      latitude: (latest?.latitude ?? latest?.lat ?? 31.23) + (Math.random() - 0.35) * 0.025,
       speed: Math.round(20 + Math.random() * 45),
       heading: Math.round(Math.random() * 359),
+      battery: Math.round(45 + Math.random() * 50),
+      source: 'web-simulator',
       status: 'online',
+      capturedAt: new Date().toISOString(),
     });
     onRefresh();
   }
@@ -155,8 +159,8 @@ function ConsolePage({ data, selectedProject, setSelectedProject, onRefresh }) {
         </div>
         <form className="inline-form" onSubmit={addProject}>
           <input placeholder="项目名称" value={projectForm.name} onChange={(e) => setProjectForm({ ...projectForm, name: e.target.value })} />
-          <input placeholder="城市" value={projectForm.city} onChange={(e) => setProjectForm({ ...projectForm, city: e.target.value })} />
-          <input placeholder="负责人" value={projectForm.manager} onChange={(e) => setProjectForm({ ...projectForm, manager: e.target.value })} />
+          <input placeholder="区域" value={projectForm.region} onChange={(e) => setProjectForm({ ...projectForm, region: e.target.value })} />
+          <input placeholder="描述" value={projectForm.description} onChange={(e) => setProjectForm({ ...projectForm, description: e.target.value })} />
           <button><Plus size={16} /> 新建</button>
         </form>
       </section>
@@ -221,7 +225,7 @@ function ScreenPage({ data, selectedProject, setSelectedProject }) {
           {data.overview.projects?.map((project) => (
             <div key={project.id} className="project-metric">
               <strong>{project.name}</strong>
-              <span>{project.city} / {project.manager}</span>
+              <span>{project.region} / {project.description || '暂无描述'}</span>
               <div>
                 <em>{project.onlineCount} 在线</em>
                 <em>{project.alertCount} 异常</em>

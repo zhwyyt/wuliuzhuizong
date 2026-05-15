@@ -22,7 +22,7 @@ export const api = {
   devices: (projectId) => request(`/devices${projectId ? `?projectId=${projectId}` : ''}`),
   createDevice: (device) => request('/devices', { method: 'POST', body: JSON.stringify(device) }),
   latest: (projectId) => request(`/locations/latest${projectId ? `?projectId=${projectId}` : ''}`),
-  track: (deviceId, projectId) => request(`/tracks?deviceId=${deviceId}${projectId ? `&projectId=${projectId}` : ''}`),
+  track: (deviceId, projectId) => request(`/devices/${deviceId}/track${projectId ? `?projectId=${projectId}` : ''}`),
   overview: (projectId) => request(`/overview${projectId ? `?projectId=${projectId}` : ''}`),
   ingestLocation: (point) => request('/locations', { method: 'POST', body: JSON.stringify(point) }),
 };
