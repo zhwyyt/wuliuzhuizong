@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { BadRequestException } from '@nestjs/common';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { DataService } from './data.service';
 
 test('ingestLocation accepts longitude and latitude fields from Android clients', () => {
@@ -158,4 +161,41 @@ test('ingestLocation rejects Android mock flag', () => {
     }),
     BadRequestException,
   );
+});
+
+test('DataService persists Android locations across service instances', () => {
+  const previousDataFile = process.env.WULIU_DATA_FILE;
+  const previousLifecycle = process.env.npm_lifecycle_event;
+  const directory = mkdtempSync(join(tmpdir(), 'wuliu-data-'));
+  process.env.WULIU_DATA_FILE = join(directory, 'runtime.json');
+  delete process.env.npm_lifecycle_event;
+
+  try {
+    const first = new DataService();
+    first.ingestLocation({
+      projectId: 'p-shanghai',
+      deviceId: 'd-android-persist',
+      deviceName: '持久化测试手机',
+      longitude: 121.7,
+      latitude: 31.4,
+      source: 'android',
+      appVersion: '0.2.0',
+    });
+
+    const second = new DataService();
+    assert.ok(second.listDevices().some((device) => device.id === 'd-android-persist'));
+    assert.ok(second.latest().some((point) => point.deviceId === 'd-android-persist'));
+  } finally {
+    if (previousDataFile === undefined) {
+      delete process.env.WULIU_DATA_FILE;
+    } else {
+      process.env.WULIU_DATA_FILE = previousDataFile;
+    }
+    if (previousLifecycle === undefined) {
+      delete process.env.npm_lifecycle_event;
+    } else {
+      process.env.npm_lifecycle_event = previousLifecycle;
+    }
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

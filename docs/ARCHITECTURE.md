@@ -38,7 +38,9 @@ WebSocket namespace:
 
 ## Persistence Plan
 
-The first runnable MVP uses an in-memory repository seeded with demo data so it can run without external services. The intended production persistence is PostgreSQL + PostGIS:
+The runnable MVP now stores runtime data in a local JSON file at `backend/data/runtime.json` so real device uploads survive backend restarts without requiring external services. Automated tests still run against memory-only state.
+
+The intended production persistence remains PostgreSQL + PostGIS:
 
 - Store location geometry as `geography(Point, 4326)`.
 - Index by `device_id`, `project_id`, and timestamp.

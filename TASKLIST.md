@@ -25,3 +25,6 @@
 - [x] Document run addresses, completed scope, gaps, and next phase.
 - [x] Complete Android Studio build verification.
 - [ ] Complete manual browser click-through verification if in-app browser automation is available.
+- [x] Start Superpowers phase 7 productionization.
+- [x] Add local persistent runtime data store.
+- [ ] Design PostgreSQL/PostGIS schema and migration path.

@@ -105,7 +105,7 @@ Then open `mobile/` in Android Studio and run Gradle Sync. The Android debug pac
 com.example.wuliugenzong
 ```
 
-The current Android app uses AMap location first and falls back to system/demo coordinates if location is unavailable.
+The current Android app uses AMap location first and falls back to system location if AMap is unavailable. It no longer uploads demo coordinates.
 
 ## 目录结构
 
@@ -119,7 +119,7 @@ The current Android app uses AMap location first and falls back to system/demo c
 
 ## 当前简化
 
-- 后端使用内存数据，便于本地零依赖演示。
+- 后端默认使用本地 JSON 文件持久化运行数据，文件位置为 `backend/data/runtime.json`。
 - 地图以坐标画布展示实时点和轨迹，保留高德地图接入边界。
 - 权限模型为演示登录，后续需要接入真实账号、角色和项目权限。
 
@@ -130,12 +130,13 @@ The current Android app uses AMap location first and falls back to system/demo c
 - `npm run lint -w web`（当前仍会提示单文件 demo 的 Fast Refresh warning）
 - 后端 API smoke check：`/health`、`/projects`、`/locations/latest`、`POST /locations`、`/devices/d-1001/track`、`/overview`
 - Web dev server HTTP 200：`http://127.0.0.1:5175`
+- Android Gradle `assembleDebug`
 
-Android 编译需要在 Android Studio 或有 Gradle wrapper/Gradle CLI 的环境中完成；当前 shell 没有可用 Gradle 命令。
+测试环境会自动使用内存仓库；如果本地临时需要禁用落盘，可以设置 `WULIU_DATA_FILE=memory`。
 
 ## 下一阶段建议
 
-- 接入 PostgreSQL + PostGIS 并迁移内存仓库。
+- 接入 PostgreSQL + PostGIS 并迁移本地 JSON 仓库。
 - 接入高德 Web JS API 和 Android 高德定位 SDK。
 - 增加后台保活、定位服务通知和 Android 任务管理。
 - 增加项目成员角色、告警规则、电子围栏和报表。

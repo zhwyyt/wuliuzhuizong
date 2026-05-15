@@ -6,6 +6,7 @@ build/
 .gradle/
 .idea/
 *.log
+backend/data/
 .env
 .env.*
 !.env.example

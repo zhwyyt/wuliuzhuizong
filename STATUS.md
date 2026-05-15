@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Approved Superpowers MVP plan implemented and locally verified, with Android Studio build verification remaining.
+Superpowers MVP plan is complete. Phase 7 productionization has started with local runtime persistence.
 
 ## Completed
 
@@ -29,24 +29,25 @@ Approved Superpowers MVP plan implemented and locally verified, with Android Stu
 - Aligned Web API usage, simulator payload, and map fallback configuration.
 - Aligned Android test collector payload, controls, and default project/device fields.
 - Verified `npm run build`, `npm test -w backend`, `npm run lint -w web`, and backend API smoke checks.
+- Verified Android Gradle `assembleDebug`.
+- Added local JSON persistence for backend runtime data at `backend/data/runtime.json`; tests continue to use memory-only state.
 - Started local dev services successfully with backend on `http://localhost:4000/api` and Web on `http://127.0.0.1:5175`.
 
 ## In Progress
 
-- Android Studio/Gradle verification remains to be completed outside this shell.
+- Superpowers phase 7 productionization.
 
 ## Blockers
 
-- Android Studio/Android Gradle runtime is not verified in the current shell, so Android device verification may need to be completed from Android Studio.
-- PostgreSQL/PostGIS service is not currently verified; MVP will use an in-memory repository first and include PostGIS-ready design notes.
+- PostgreSQL/PostGIS service is not currently verified; local JSON persistence is the current bridge toward production storage.
 
 ## Risks
 
-- In-memory storage is suitable for demo only and must be replaced with PostgreSQL/PostGIS before real use.
+- Local JSON storage is suitable for small local trials only and must be replaced with PostgreSQL/PostGIS before real use.
 - 高德地图 production usage requires a valid API key configured by the deployer.
 - In-app browser verification timed out twice in the current shell; frontend was verified by build, lint, dev server HTTP 200, and backend smoke checks.
 
 ## Next Steps
 
-- Complete Android Studio build and emulator/phone upload verification.
-- Use the running local Web app to do a manual click-through of login, simulated upload, track replay, and big-screen filtering.
+- Design and implement PostgreSQL/PostGIS persistence.
+- Add real authentication, project permissions, and device upload credentials.

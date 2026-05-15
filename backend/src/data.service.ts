@@ -1,4 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { Device, DeviceStatus, LatestLocation, LocationInput, LocationPoint, Project, User } from './domain';
 
 const now = () => new Date().toISOString();
@@ -9,6 +11,13 @@ const toNumber = (value: number | string | undefined, field: string): number => 
   }
   return parsed;
 };
+
+interface DataState {
+  users: User[];
+  projects: Project[];
+  devices: Device[];
+  locations: LocationPoint[];
+}
 
 @Injectable()
 export class DataService {
@@ -36,9 +45,15 @@ export class DataService {
     this.point('d-3001', 120.5853, 31.2989, 8, 15, 'idle', -12),
   ];
 
+  constructor() {
+    this.loadPersistedState();
+    this.saveState();
+  }
+
   login(name?: string): User {
     const user = { ...this.users[0], name: name?.trim() || this.users[0].name };
     this.users[0] = user;
+    this.saveState();
     return user;
   }
 
@@ -64,6 +79,7 @@ export class DataService {
       createdAt: now(),
     };
     this.projects.unshift(project);
+    this.saveState();
     return project;
   }
 
@@ -86,6 +102,7 @@ export class DataService {
       status: input.status ?? 'offline',
     };
     this.devices.unshift(device);
+    this.saveState();
     return device;
   }
 
@@ -137,6 +154,7 @@ export class DataService {
       timestamp: capturedAt,
     };
     this.locations.push(point);
+    this.saveState();
     return this.toLatest(point);
   }
 
@@ -166,6 +184,7 @@ export class DataService {
       status: input.status ?? 'online',
     };
     this.devices.unshift(device);
+    this.saveState();
     return device;
   }
 
@@ -211,6 +230,58 @@ export class DataService {
   private visibleDevices(): Device[] {
     const visibleDeviceIds = new Set(this.visibleLocations().map((point) => point.deviceId));
     return this.devices.filter((device) => visibleDeviceIds.has(device.id));
+  }
+
+  private loadPersistedState(): void {
+    if (!this.shouldPersist()) {
+      return;
+    }
+    const file = this.dataFilePath();
+    if (!existsSync(file)) {
+      return;
+    }
+    try {
+      const parsed = JSON.parse(readFileSync(file, 'utf8')) as Partial<DataState>;
+      if (Array.isArray(parsed.users)) {
+        this.users = parsed.users;
+      }
+      if (Array.isArray(parsed.projects)) {
+        this.projects = parsed.projects;
+      }
+      if (Array.isArray(parsed.devices)) {
+        this.devices = parsed.devices;
+      }
+      if (Array.isArray(parsed.locations)) {
+        this.locations = parsed.locations;
+      }
+    } catch (error) {
+      console.warn(`Could not load persisted data from ${file}:`, error);
+    }
+  }
+
+  private saveState(): void {
+    if (!this.shouldPersist()) {
+      return;
+    }
+    const file = this.dataFilePath();
+    const tempFile = `${file}.tmp`;
+    const state: DataState = {
+      users: this.users,
+      projects: this.projects,
+      devices: this.devices,
+      locations: this.locations,
+    };
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(tempFile, JSON.stringify(state, null, 2), 'utf8');
+    renameSync(tempFile, file);
+  }
+
+  private shouldPersist(): boolean {
+    return process.env.NODE_ENV !== 'test' && process.env.npm_lifecycle_event !== 'test' && process.env.WULIU_DATA_FILE !== 'memory';
+  }
+
+  private dataFilePath(): string {
+    return process.env.WULIU_DATA_FILE?.trim() || join(process.cwd(), 'data', 'runtime.json');
   }
 
   private point(deviceId: string, longitude: number, latitude: number, speed: number, heading: number, status: DeviceStatus, minutesOffset: number): LocationPoint {
