@@ -43,12 +43,15 @@ export class DataService {
   }
 
   listProjects() {
-    return this.projects.map((project) => ({
-      ...project,
-      deviceCount: this.devices.filter((device) => device.projectId === project.id).length,
-      onlineCount: this.devices.filter((device) => device.projectId === project.id && device.status === 'online').length,
-      alertCount: this.devices.filter((device) => device.projectId === project.id && device.status === 'alert').length,
-    }));
+    const visibleDevices = this.visibleDevices();
+    return this.projects
+      .map((project) => ({
+        ...project,
+        deviceCount: visibleDevices.filter((device) => device.projectId === project.id).length,
+        onlineCount: visibleDevices.filter((device) => device.projectId === project.id && device.status === 'online').length,
+        alertCount: visibleDevices.filter((device) => device.projectId === project.id && device.status === 'alert').length,
+      }))
+      .filter((project) => project.deviceCount > 0);
   }
 
   createProject(input: Partial<Project>): Project {
@@ -65,7 +68,7 @@ export class DataService {
   }
 
   listDevices(projectId?: string): Device[] {
-    return this.devices.filter((device) => !projectId || device.projectId === projectId);
+    return this.visibleDevices().filter((device) => !projectId || device.projectId === projectId);
   }
 
   createDevice(input: Partial<Device>): Device {
@@ -155,7 +158,7 @@ export class DataService {
 
   latest(projectId?: string): LatestLocation[] {
     const byDevice = new Map<string, LocationPoint>();
-    for (const point of this.locations) {
+    for (const point of this.visibleLocations()) {
       if (!projectId || point.projectId === projectId) {
         byDevice.set(point.deviceId, point);
       }
@@ -164,15 +167,18 @@ export class DataService {
   }
 
   track(deviceId: string, projectId?: string): LocationPoint[] {
-    return this.locations
+    return this.visibleLocations()
       .filter((point) => point.deviceId === deviceId && (!projectId || point.projectId === projectId))
       .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   }
 
   overview(projectId?: string) {
-    const projects = projectId ? this.projects.filter((project) => project.id === projectId) : this.projects;
+    const visibleProjectIds = new Set(this.visibleDevices().map((device) => device.projectId));
+    const projects = (projectId ? this.projects.filter((project) => project.id === projectId) : this.projects).filter((project) =>
+      visibleProjectIds.has(project.id),
+    );
     const projectIds = new Set(projects.map((project) => project.id));
-    const devices = this.devices.filter((device) => projectIds.has(device.projectId));
+    const devices = this.visibleDevices().filter((device) => projectIds.has(device.projectId));
     const latest = this.latest(projectId);
     return {
       projectTotal: projects.length,
@@ -183,6 +189,15 @@ export class DataService {
       projects: this.listProjects().filter((project) => projectIds.has(project.id)),
       latest,
     };
+  }
+
+  private visibleLocations(): LocationPoint[] {
+    return this.locations.filter((point) => point.source === 'android');
+  }
+
+  private visibleDevices(): Device[] {
+    const visibleDeviceIds = new Set(this.visibleLocations().map((point) => point.deviceId));
+    return this.devices.filter((device) => visibleDeviceIds.has(device.id));
   }
 
   private point(deviceId: string, longitude: number, latitude: number, speed: number, heading: number, status: DeviceStatus, minutesOffset: number): LocationPoint {

@@ -42,6 +42,19 @@ test('ingestLocation still accepts lng and lat fields from the Web simulator', (
   assert.equal(point.longitude, 121.61);
   assert.equal(point.latitude, 31.31);
   assert.equal(point.source, 'web-simulator');
+  assert.equal(service.latest().length, 0);
+  assert.equal(service.listDevices().length, 0);
+});
+
+test('seed demo data is hidden from public lists', () => {
+  const service = new DataService();
+
+  assert.equal(service.latest().length, 0);
+  assert.equal(service.listDevices().length, 0);
+  assert.equal(service.listProjects().length, 0);
+  assert.equal(service.overview().deviceTotal, 0);
+  assert.equal(service.overview().projectTotal, 0);
+  assert.equal(service.overview().todayActive, 0);
 });
 
 test('ingestLocation rejects mismatched projectId', () => {
@@ -85,6 +98,7 @@ test('ingestLocation creates unknown Android devices from payload metadata', () 
   assert.equal(point.deviceId, 'd-android-001');
   assert.equal(point.deviceName, 'Android 测试手机');
   assert.ok(service.listDevices('p-shanghai').some((device) => device.id === 'd-android-001'));
+  assert.ok(service.listProjects().some((project) => project.id === 'p-shanghai'));
 });
 
 test('ingestLocation rejects known Android emulator mock coordinate', () => {
