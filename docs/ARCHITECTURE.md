@@ -38,9 +38,14 @@ WebSocket namespace:
 
 ## Persistence Plan
 
-The runnable MVP now stores runtime data in a local JSON file at `backend/data/runtime.json` so real device uploads survive backend restarts without requiring external services. Automated tests still run against memory-only state.
+The backend now supports two runtime persistence modes:
 
-The intended production persistence remains PostgreSQL + PostGIS:
+- PostgreSQL mode is enabled when `DB_HOST`, `DB_USERNAME`, and `DB_DATABASE` are configured. The app creates the database if needed and owns `wuliu_*` tables inside it.
+- If the PostgreSQL server has PostGIS installed, the app automatically enables the extension, adds a `geog geography(Point, 4326)` column, and creates a GiST spatial index.
+- Local JSON mode stores runtime data at `backend/data/runtime.json` when database configuration is absent.
+- Automated tests run against memory-only state.
+
+The intended production persistence upgrade remains PostgreSQL + PostGIS:
 
 - Store location geometry as `geography(Point, 4326)`.
 - Index by `device_id`, `project_id`, and timestamp.

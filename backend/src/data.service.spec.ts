@@ -6,10 +6,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { DataService } from './data.service';
 
-test('ingestLocation accepts longitude and latitude fields from Android clients', () => {
+test('ingestLocation accepts longitude and latitude fields from Android clients', async () => {
   const service = new DataService();
 
-  const point = service.ingestLocation({
+  const point = await service.ingestLocation({
     projectId: 'p-shanghai',
     deviceId: 'd-1001',
     longitude: 121.5,
@@ -39,10 +39,10 @@ test('ingestLocation accepts longitude and latitude fields from Android clients'
   assert.equal(point.timestamp, '2026-05-15T06:00:00.000Z');
 });
 
-test('ingestLocation still accepts lng and lat fields from the Web simulator', () => {
+test('ingestLocation still accepts lng and lat fields from the Web simulator', async () => {
   const service = new DataService();
 
-  const point = service.ingestLocation({
+  const point = await service.ingestLocation({
     deviceId: 'd-1001',
     lng: 121.61,
     lat: 31.31,
@@ -52,25 +52,25 @@ test('ingestLocation still accepts lng and lat fields from the Web simulator', (
   assert.equal(point.longitude, 121.61);
   assert.equal(point.latitude, 31.31);
   assert.equal(point.source, 'web-simulator');
-  assert.equal(service.latest().length, 0);
-  assert.equal(service.listDevices().length, 0);
+  assert.equal((await service.latest()).length, 0);
+  assert.equal((await service.listDevices()).length, 0);
 });
 
-test('seed demo data is hidden from public lists', () => {
+test('seed demo data is hidden from public lists', async () => {
   const service = new DataService();
 
-  assert.equal(service.latest().length, 0);
-  assert.equal(service.listDevices().length, 0);
-  assert.equal(service.listProjects().length, 0);
-  assert.equal(service.overview().deviceTotal, 0);
-  assert.equal(service.overview().projectTotal, 0);
-  assert.equal(service.overview().todayActive, 0);
+  assert.equal((await service.latest()).length, 0);
+  assert.equal((await service.listDevices()).length, 0);
+  assert.equal((await service.listProjects()).length, 0);
+  assert.equal((await service.overview()).deviceTotal, 0);
+  assert.equal((await service.overview()).projectTotal, 0);
+  assert.equal((await service.overview()).todayActive, 0);
 });
 
-test('ingestLocation rejects mismatched projectId', () => {
+test('ingestLocation rejects mismatched projectId', async () => {
   const service = new DataService();
 
-  assert.throws(
+  await assert.rejects(
     () => service.ingestLocation({
       projectId: 'p-hangzhou',
       deviceId: 'd-1001',
@@ -81,23 +81,23 @@ test('ingestLocation rejects mismatched projectId', () => {
   );
 });
 
-test('track returns timestamp-sorted points for one device', () => {
+test('track returns timestamp-sorted points for one device', async () => {
   const service = new DataService();
 
-  service.ingestLocation({ deviceId: 'd-1001', longitude: 121.7, latitude: 31.4, appVersion: '0.2.0', capturedAt: '2026-05-15T06:10:00.000Z' });
-  service.ingestLocation({ deviceId: 'd-1001', longitude: 121.6, latitude: 31.3, appVersion: '0.2.0', capturedAt: '2026-05-15T06:05:00.000Z' });
+  await service.ingestLocation({ deviceId: 'd-1001', longitude: 121.7, latitude: 31.4, appVersion: '0.2.0', capturedAt: '2026-05-15T06:10:00.000Z' });
+  await service.ingestLocation({ deviceId: 'd-1001', longitude: 121.6, latitude: 31.3, appVersion: '0.2.0', capturedAt: '2026-05-15T06:05:00.000Z' });
 
-  const track = service.track('d-1001');
+  const track = await service.track('d-1001');
   const timestamps = track.map((point) => point.timestamp);
 
   assert.deepEqual([...timestamps].sort(), timestamps);
   assert.ok(track.every((point) => point.deviceId === 'd-1001'));
 });
 
-test('ingestLocation creates unknown Android devices from payload metadata', () => {
+test('ingestLocation creates unknown Android devices from payload metadata', async () => {
   const service = new DataService();
 
-  const point = service.ingestLocation({
+  const point = await service.ingestLocation({
     projectId: 'p-shanghai',
     deviceId: 'd-android-001',
     deviceName: 'Android 测试手机',
@@ -108,14 +108,14 @@ test('ingestLocation creates unknown Android devices from payload metadata', () 
 
   assert.equal(point.deviceId, 'd-android-001');
   assert.equal(point.deviceName, 'Android 测试手机');
-  assert.ok(service.listDevices('p-shanghai').some((device) => device.id === 'd-android-001'));
-  assert.ok(service.listProjects().some((project) => project.id === 'p-shanghai'));
+  assert.ok((await service.listDevices('p-shanghai')).some((device) => device.id === 'd-android-001'));
+  assert.ok((await service.listProjects()).some((project) => project.id === 'p-shanghai'));
 });
 
-test('ingestLocation rejects known Android emulator mock coordinate', () => {
+test('ingestLocation rejects known Android emulator mock coordinate', async () => {
   const service = new DataService();
 
-  assert.throws(
+  await assert.rejects(
     () => service.ingestLocation({
       projectId: 'p-shanghai',
       deviceId: 'd-android-001',
@@ -128,10 +128,10 @@ test('ingestLocation rejects known Android emulator mock coordinate', () => {
   );
 });
 
-test('ingestLocation rejects old Android APK uploads without appVersion', () => {
+test('ingestLocation rejects old Android APK uploads without appVersion', async () => {
   const service = new DataService();
 
-  assert.throws(
+  await assert.rejects(
     () => service.ingestLocation({
       projectId: 'p-shanghai',
       deviceId: 'd-android-001',
@@ -145,10 +145,10 @@ test('ingestLocation rejects old Android APK uploads without appVersion', () => 
   );
 });
 
-test('ingestLocation rejects Android mock flag', () => {
+test('ingestLocation rejects Android mock flag', async () => {
   const service = new DataService();
 
-  assert.throws(
+  await assert.rejects(
     () => service.ingestLocation({
       projectId: 'p-shanghai',
       deviceId: 'd-android-001',
@@ -163,7 +163,7 @@ test('ingestLocation rejects Android mock flag', () => {
   );
 });
 
-test('DataService persists Android locations across service instances', () => {
+test('DataService persists Android locations across service instances', async () => {
   const previousDataFile = process.env.WULIU_DATA_FILE;
   const previousLifecycle = process.env.npm_lifecycle_event;
   const directory = mkdtempSync(join(tmpdir(), 'wuliu-data-'));
@@ -172,7 +172,7 @@ test('DataService persists Android locations across service instances', () => {
 
   try {
     const first = new DataService();
-    first.ingestLocation({
+    await first.ingestLocation({
       projectId: 'p-shanghai',
       deviceId: 'd-android-persist',
       deviceName: '持久化测试手机',
@@ -183,8 +183,8 @@ test('DataService persists Android locations across service instances', () => {
     });
 
     const second = new DataService();
-    assert.ok(second.listDevices().some((device) => device.id === 'd-android-persist'));
-    assert.ok(second.latest().some((point) => point.deviceId === 'd-android-persist'));
+    assert.ok((await second.listDevices()).some((device) => device.id === 'd-android-persist'));
+    assert.ok((await second.latest()).some((point) => point.deviceId === 'd-android-persist'));
   } finally {
     if (previousDataFile === undefined) {
       delete process.env.WULIU_DATA_FILE;

@@ -16,57 +16,57 @@ export class AppController {
   }
 
   @Post('auth/login')
-  login(@Body() body: { name?: string }) {
+  async login(@Body() body: { name?: string }) {
     return {
       token: 'demo-token',
-      user: this.data.login(body.name),
+      user: await this.data.login(body.name),
     };
   }
 
   @Get('projects')
-  projects() {
+  async projects() {
     return this.data.listProjects();
   }
 
   @Post('projects')
-  createProject(@Body() body: Partial<Project>) {
+  async createProject(@Body() body: Partial<Project>) {
     return this.data.createProject(body);
   }
 
   @Get('devices')
-  devices(@Query('projectId') projectId?: string) {
+  async devices(@Query('projectId') projectId?: string) {
     return this.data.listDevices(projectId);
   }
 
   @Post('devices')
-  createDevice(@Body() body: Partial<Device>) {
+  async createDevice(@Body() body: Partial<Device>) {
     return this.data.createDevice(body);
   }
 
   @Post('locations')
-  ingestLocation(@Body() body: LocationInput) {
-    const point = this.data.ingestLocation(body);
+  async ingestLocation(@Body() body: LocationInput) {
+    const point = await this.data.ingestLocation(body);
     this.realtime.publishLocation(point);
     return point;
   }
 
   @Get('locations/latest')
-  latest(@Query('projectId') projectId?: string) {
+  async latest(@Query('projectId') projectId?: string) {
     return this.data.latest(projectId);
   }
 
   @Get('devices/:id/track')
-  deviceTrack(@Param('id') deviceId: string, @Query('projectId') projectId?: string) {
+  async deviceTrack(@Param('id') deviceId: string, @Query('projectId') projectId?: string) {
     return this.data.track(deviceId, projectId);
   }
 
   @Get('tracks')
-  tracks(@Query('deviceId') deviceId: string, @Query('projectId') projectId?: string) {
+  async tracks(@Query('deviceId') deviceId: string, @Query('projectId') projectId?: string) {
     return this.data.track(deviceId, projectId);
   }
 
   @Get('overview')
-  overview(@Query('projectId') projectId?: string) {
+  async overview(@Query('projectId') projectId?: string) {
     return this.data.overview(projectId);
   }
 }

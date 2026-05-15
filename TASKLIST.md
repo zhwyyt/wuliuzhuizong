@@ -27,4 +27,6 @@
 - [ ] Complete manual browser click-through verification if in-app browser automation is available.
 - [x] Start Superpowers phase 7 productionization.
 - [x] Add local persistent runtime data store.
-- [ ] Design PostgreSQL/PostGIS schema and migration path.
+- [x] Add PostgreSQL runtime persistence.
+- [x] Add optional PostGIS geography columns and spatial indexes.
+- [ ] Install PostGIS extension in local PostgreSQL and verify spatial index creation.

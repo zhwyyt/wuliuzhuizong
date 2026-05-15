@@ -30,7 +30,10 @@ Superpowers MVP plan is complete. Phase 7 productionization has started with loc
 - Aligned Android test collector payload, controls, and default project/device fields.
 - Verified `npm run build`, `npm test -w backend`, `npm run lint -w web`, and backend API smoke checks.
 - Verified Android Gradle `assembleDebug`.
-- Added local JSON persistence for backend runtime data at `backend/data/runtime.json`; tests continue to use memory-only state.
+- Added PostgreSQL runtime persistence with automatic database/table initialization using `wuliu_*` tables.
+- Added optional PostGIS initialization for geography point storage and GiST indexing when the extension is installed.
+- Added local JSON persistence fallback at `backend/data/runtime.json`; tests continue to use memory-only state.
+- Verified PostgreSQL connection to the configured `wms` database and API location ingest/latest-location smoke checks.
 - Started local dev services successfully with backend on `http://localhost:4000/api` and Web on `http://127.0.0.1:5175`.
 
 ## In Progress
@@ -39,15 +42,15 @@ Superpowers MVP plan is complete. Phase 7 productionization has started with loc
 
 ## Blockers
 
-- PostgreSQL/PostGIS service is not currently verified; local JSON persistence is the current bridge toward production storage.
+- PostgreSQL is verified locally. The local PostgreSQL server does not currently have the PostGIS extension installed, so the app is running scalar longitude/latitude storage.
 
 ## Risks
 
-- Local JSON storage is suitable for small local trials only and must be replaced with PostgreSQL/PostGIS before real use.
+- Current local PostgreSQL storage uses scalar longitude/latitude columns until PostGIS is installed on the server.
 - 高德地图 production usage requires a valid API key configured by the deployer.
 - In-app browser verification timed out twice in the current shell; frontend was verified by build, lint, dev server HTTP 200, and backend smoke checks.
 
 ## Next Steps
 
-- Design and implement PostgreSQL/PostGIS persistence.
+- Install PostGIS on the local PostgreSQL server and re-run backend startup to enable the geography column/index.
 - Add real authentication, project permissions, and device upload credentials.

@@ -24,6 +24,18 @@ npm run dev
 - 健康检查：http://localhost:4000/api/health
 - 真机/Tailscale 后端地址格式：http://电脑IP:4000/api
 
+## PostgreSQL 持久化
+
+后端会自动读取 `backend/.env`。如果配置了 `DB_HOST`、`DB_USERNAME` 和 `DB_DATABASE`，后端会使用 PostgreSQL，并自动创建数据库和 `wuliu_*` 业务表。
+
+复制示例配置：
+
+```powershell
+Copy-Item backend/.env.example backend/.env
+```
+
+本地没有数据库配置时，后端会继续使用 `backend/data/runtime.json` 作为轻量持久化。
+
 ## 演示账号
 
 登录页输入任意账号名称即可进入，默认使用 `调度管理员`。
@@ -119,7 +131,7 @@ The current Android app uses AMap location first and falls back to system locati
 
 ## 当前简化
 
-- 后端默认使用本地 JSON 文件持久化运行数据，文件位置为 `backend/data/runtime.json`。
+- 后端优先使用 PostgreSQL；未配置数据库时使用本地 JSON 文件持久化运行数据，文件位置为 `backend/data/runtime.json`。
 - 地图以坐标画布展示实时点和轨迹，保留高德地图接入边界。
 - 权限模型为演示登录，后续需要接入真实账号、角色和项目权限。
 
@@ -131,12 +143,13 @@ The current Android app uses AMap location first and falls back to system locati
 - 后端 API smoke check：`/health`、`/projects`、`/locations/latest`、`POST /locations`、`/devices/d-1001/track`、`/overview`
 - Web dev server HTTP 200：`http://127.0.0.1:5175`
 - Android Gradle `assembleDebug`
+- PostgreSQL 模式 API smoke check：自动建库/建表、位置上报、最新位置查询
 
 测试环境会自动使用内存仓库；如果本地临时需要禁用落盘，可以设置 `WULIU_DATA_FILE=memory`。
 
 ## 下一阶段建议
 
-- 接入 PostgreSQL + PostGIS 并迁移本地 JSON 仓库。
+- 在 PostgreSQL 表上启用 PostGIS geometry/geography 字段和空间索引。
 - 接入高德 Web JS API 和 Android 高德定位 SDK。
 - 增加后台保活、定位服务通知和 Android 任务管理。
 - 增加项目成员角色、告警规则、电子围栏和报表。
