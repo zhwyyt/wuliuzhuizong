@@ -25,7 +25,6 @@ export default [
     rules: {
       ...js.configs.recommended.rules,
       ...react.configs.flat.recommended.rules,
-      ...react.configs.flat['jsx-runtime'].rules,
       ...reactHooks.configs.recommended.rules,
       'react/prop-types': 'off',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
