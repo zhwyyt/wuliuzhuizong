@@ -75,7 +75,7 @@ public class MainActivity extends Activity {
         root.setGravity(Gravity.CENTER_HORIZONTAL);
 
         TextView title = new TextView(this);
-        title.setText("物流跟踪采集端");
+        title.setText("物流跟踪采集端 v" + BuildConfig.VERSION_NAME);
         title.setTextSize(24);
         title.setGravity(Gravity.CENTER);
         root.addView(title, fullWidth());
@@ -173,7 +173,7 @@ public class MainActivity extends Activity {
             boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
             if (granted) {
                 statusView.setText("定位权限已授权，请再次点击开始定位上报。");
-        } else {
+            } else {
                 statusView.setText("定位权限未授权，无法上报真实位置。");
             }
         }
@@ -208,8 +208,11 @@ public class MainActivity extends Activity {
             androidLocation.setLatitude(location.getLatitude());
             androidLocation.setSpeed(location.getSpeed());
             androidLocation.setBearing(location.getBearing());
+            if (location.hasAccuracy()) {
+                androidLocation.setAccuracy(location.getAccuracy());
+            }
             lastLocation = androidLocation;
-            statusView.setText("高德定位：" + location.getLongitude() + ", " + location.getLatitude());
+            statusView.setText("高德定位：" + location.getLongitude() + ", " + location.getLatitude() + "，精度 " + location.getAccuracy() + "m");
         });
         amapLocationClient.startLocation();
     }
@@ -272,6 +275,11 @@ public class MainActivity extends Activity {
             body.put("source", "android");
             body.put("status", "online");
             body.put("capturedAt", utcNow());
+            body.put("provider", location.getProvider());
+            body.put("accuracy", location.hasAccuracy() ? location.getAccuracy() : JSONObject.NULL);
+            body.put("mock", isMockLocation(location));
+            body.put("appVersion", BuildConfig.VERSION_NAME);
+            body.put("appVersionCode", BuildConfig.VERSION_CODE);
 
             URL url = new URL(apiBaseInput.getText().toString().trim() + "/locations");
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();

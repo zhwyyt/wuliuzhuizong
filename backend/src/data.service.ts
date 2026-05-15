@@ -97,7 +97,15 @@ export class DataService {
 
     const longitude = toNumber(input.longitude ?? input.lng, 'longitude');
     const latitude = toNumber(input.latitude ?? input.lat, 'latitude');
+    const source = input.source ?? 'android';
+    const isMock = input.mock === true || input.mock === 'true';
+    if (source === 'android' && !input.appVersion?.trim()) {
+      throw new BadRequestException('Android app is too old; please install the latest APK');
+    }
     if (this.isKnownMockCoordinate(longitude, latitude)) {
+      throw new BadRequestException('mock location is not accepted');
+    }
+    if (isMock) {
       throw new BadRequestException('mock location is not accepted');
     }
     const status = input.status ?? 'online';
@@ -117,7 +125,12 @@ export class DataService {
       speed: Number(input.speed ?? 0),
       heading: Number(input.heading ?? 0),
       battery: input.battery === undefined ? undefined : Number(input.battery),
-      source: input.source ?? 'android',
+      accuracy: input.accuracy === undefined || input.accuracy === null ? undefined : Number(input.accuracy),
+      provider: input.provider,
+      mock: isMock,
+      appVersion: input.appVersion,
+      appVersionCode: input.appVersionCode === undefined ? undefined : Number(input.appVersionCode),
+      source,
       status,
       capturedAt,
       receivedAt,

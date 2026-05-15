@@ -40,6 +40,11 @@ export interface LocationPoint {
   speed: number;
   heading: number;
   battery?: number;
+  accuracy?: number;
+  provider?: string;
+  mock?: boolean;
+  appVersion?: string;
+  appVersionCode?: number;
   source: LocationSource;
   status: DeviceStatus;
   capturedAt: string;
@@ -66,6 +71,11 @@ export interface LocationInput {
   speed?: number | string;
   heading?: number | string;
   battery?: number | string;
+  accuracy?: number | string;
+  provider?: string;
+  mock?: boolean | string;
+  appVersion?: string;
+  appVersionCode?: number | string;
   source?: LocationSource;
   status?: DeviceStatus;
   capturedAt?: string;

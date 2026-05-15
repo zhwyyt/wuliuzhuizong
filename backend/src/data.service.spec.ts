@@ -15,6 +15,10 @@ test('ingestLocation accepts longitude and latitude fields from Android clients'
     heading: 90,
     battery: 88,
     source: 'android',
+    appVersion: '0.2.0',
+    appVersionCode: 2,
+    provider: 'amap',
+    accuracy: 12,
     capturedAt: '2026-05-15T06:00:00.000Z',
   });
 
@@ -25,6 +29,9 @@ test('ingestLocation accepts longitude and latitude fields from Android clients'
   assert.equal(point.lng, 121.5);
   assert.equal(point.lat, 31.2);
   assert.equal(point.battery, 88);
+  assert.equal(point.appVersion, '0.2.0');
+  assert.equal(point.provider, 'amap');
+  assert.equal(point.accuracy, 12);
   assert.equal(point.source, 'android');
   assert.equal(point.timestamp, '2026-05-15T06:00:00.000Z');
 });
@@ -74,8 +81,8 @@ test('ingestLocation rejects mismatched projectId', () => {
 test('track returns timestamp-sorted points for one device', () => {
   const service = new DataService();
 
-  service.ingestLocation({ deviceId: 'd-1001', longitude: 121.7, latitude: 31.4, capturedAt: '2026-05-15T06:10:00.000Z' });
-  service.ingestLocation({ deviceId: 'd-1001', longitude: 121.6, latitude: 31.3, capturedAt: '2026-05-15T06:05:00.000Z' });
+  service.ingestLocation({ deviceId: 'd-1001', longitude: 121.7, latitude: 31.4, appVersion: '0.2.0', capturedAt: '2026-05-15T06:10:00.000Z' });
+  service.ingestLocation({ deviceId: 'd-1001', longitude: 121.6, latitude: 31.3, appVersion: '0.2.0', capturedAt: '2026-05-15T06:05:00.000Z' });
 
   const track = service.track('d-1001');
   const timestamps = track.map((point) => point.timestamp);
@@ -93,6 +100,7 @@ test('ingestLocation creates unknown Android devices from payload metadata', () 
     deviceName: 'Android 测试手机',
     longitude: 121.5,
     latitude: 31.2,
+    appVersion: '0.2.0',
   });
 
   assert.equal(point.deviceId, 'd-android-001');
@@ -111,6 +119,42 @@ test('ingestLocation rejects known Android emulator mock coordinate', () => {
       deviceName: 'Android 测试手机',
       longitude: -122.084,
       latitude: 37.421998333333335,
+      appVersion: '0.2.0',
+    }),
+    BadRequestException,
+  );
+});
+
+test('ingestLocation rejects old Android APK uploads without appVersion', () => {
+  const service = new DataService();
+
+  assert.throws(
+    () => service.ingestLocation({
+      projectId: 'p-shanghai',
+      deviceId: 'd-android-001',
+      deviceName: 'Android 测试手机',
+      longitude: 121.504,
+      latitude: 31.234,
+      speed: 43.2,
+      source: 'android',
+    }),
+    BadRequestException,
+  );
+});
+
+test('ingestLocation rejects Android mock flag', () => {
+  const service = new DataService();
+
+  assert.throws(
+    () => service.ingestLocation({
+      projectId: 'p-shanghai',
+      deviceId: 'd-android-001',
+      deviceName: 'Android 测试手机',
+      longitude: 120.16,
+      latitude: 30.79,
+      appVersion: '0.2.0',
+      source: 'android',
+      mock: true,
     }),
     BadRequestException,
   );
