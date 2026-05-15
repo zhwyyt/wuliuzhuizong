@@ -13,6 +13,8 @@ import {
   LocationPoint,
   NearbyLocation,
   Project,
+  RouteCorridor,
+  RouteCorridorInput,
   RouteDeviationInput,
   RouteDeviationPoint,
   RouteDeviationResult,
@@ -55,6 +57,7 @@ interface DataState {
   locations: LocationPoint[];
   geofences: Geofence[];
   alerts: AlertEvent[];
+  routeCorridors: RouteCorridor[];
 }
 
 type AlertListInput = {
@@ -141,6 +144,16 @@ type AlertEventRow = {
   created_at: Date | string;
 };
 
+type RouteCorridorRow = {
+  id: string;
+  project_id: string;
+  name: string;
+  route_points: unknown;
+  tolerance_meters: number;
+  status: RouteCorridor['status'];
+  created_at: Date | string;
+};
+
 @Injectable()
 export class DataService {
   private pool?: Pool;
@@ -172,6 +185,7 @@ export class DataService {
 
   private geofences: Geofence[] = [];
   private alerts: AlertEvent[] = [];
+  private routeCorridors: RouteCorridor[] = [];
 
   constructor() {
     if (this.shouldUsePostgres()) {
@@ -689,8 +703,11 @@ export class DataService {
     if (!input.deviceId?.trim()) {
       throw new BadRequestException('deviceId is required');
     }
-    const route = this.parseRoute(input.route);
-    const toleranceMeters = input.toleranceMeters === undefined ? DEFAULT_ROUTE_TOLERANCE_METERS : toNumber(input.toleranceMeters, 'toleranceMeters');
+    const corridor = input.routeId ? await this.findRouteCorridor(input.routeId) : undefined;
+    const route = input.route ? this.parseRoute(input.route) : this.routePointsForCalculation(corridor);
+    const toleranceMeters = input.toleranceMeters === undefined
+      ? (corridor?.toleranceMeters ?? DEFAULT_ROUTE_TOLERANCE_METERS)
+      : toNumber(input.toleranceMeters, 'toleranceMeters');
     if (toleranceMeters <= 0) {
       throw new BadRequestException('toleranceMeters must be greater than 0');
     }
@@ -715,14 +732,72 @@ export class DataService {
         ...this.locationFromRow(row),
         distanceMeters: Math.round(Number(row.distance_meters)),
       }));
-      return this.toRouteDeviationResult(input.deviceId, input.projectId, toleranceMeters, measured);
+      return this.toRouteDeviationResult(input.deviceId, input.projectId, input.routeId, toleranceMeters, measured);
     }
 
     const measured = track.map((point) => ({
       ...point,
       distanceMeters: Math.round(this.distanceToRouteMeters(point.latitude, point.longitude, route)),
     }));
-    return this.toRouteDeviationResult(input.deviceId, input.projectId, toleranceMeters, measured);
+    return this.toRouteDeviationResult(input.deviceId, input.projectId, input.routeId, toleranceMeters, measured);
+  }
+
+  async listRouteCorridors(projectId?: string): Promise<RouteCorridor[]> {
+    if (!this.pool) {
+      return this.routeCorridors.filter((corridor) => !projectId || corridor.projectId === projectId);
+    }
+
+    await this.ready;
+    const params = projectId ? [projectId] : [];
+    const result = await this.pool.query<RouteCorridorRow>(
+      `
+      select *
+      from wuliu_route_corridors
+      ${projectId ? 'where project_id = $1' : ''}
+      order by created_at desc
+      `,
+      params,
+    );
+    return result.rows.map((row) => this.routeCorridorFromRow(row));
+  }
+
+  async createRouteCorridor(input: RouteCorridorInput): Promise<RouteCorridor> {
+    const projectId = input.projectId || this.projects[0]?.id;
+    await this.ensureProjectExists(projectId);
+    const route = this.normalizeRoute(input.route);
+    const toleranceMeters = input.toleranceMeters === undefined ? DEFAULT_ROUTE_TOLERANCE_METERS : toNumber(input.toleranceMeters, 'toleranceMeters');
+    if (toleranceMeters <= 0) {
+      throw new BadRequestException('toleranceMeters must be greater than 0');
+    }
+    const corridor: RouteCorridor = {
+      id: `route-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      projectId,
+      name: input.name?.trim() || '新路线走廊',
+      route,
+      toleranceMeters,
+      status: input.status ?? 'active',
+      createdAt: now(),
+    };
+
+    if (this.pool) {
+      await this.ready;
+      const result = await this.pool.query<RouteCorridorRow>(
+        `
+        insert into wuliu_route_corridors (
+          id, project_id, name, route_points, tolerance_meters, status, created_at
+        ) values (
+          $1, $2, $3, $4::jsonb, $5, $6, $7
+        )
+        returning *
+        `,
+        [corridor.id, corridor.projectId, corridor.name, JSON.stringify(corridor.route), corridor.toleranceMeters, corridor.status, corridor.createdAt],
+      );
+      return this.routeCorridorFromRow(result.rows[0]);
+    }
+
+    this.routeCorridors.unshift(corridor);
+    this.saveState();
+    return corridor;
   }
 
   async track(deviceId: string, projectId?: string): Promise<LocationPoint[]> {
@@ -880,6 +955,16 @@ export class DataService {
         created_at timestamptz not null
       );
 
+      create table if not exists wuliu_route_corridors (
+        id text primary key,
+        project_id text not null references wuliu_projects(id),
+        name text not null,
+        route_points jsonb not null,
+        tolerance_meters double precision not null,
+        status text not null,
+        created_at timestamptz not null
+      );
+
       create index if not exists idx_wuliu_locations_device_timestamp on wuliu_locations(device_id, timestamp desc);
       create index if not exists idx_wuliu_locations_project_timestamp on wuliu_locations(project_id, timestamp desc);
       create index if not exists idx_wuliu_locations_source on wuliu_locations(source);
@@ -887,6 +972,7 @@ export class DataService {
       create index if not exists idx_wuliu_geofences_project on wuliu_geofences(project_id);
       create index if not exists idx_wuliu_alert_events_project_created on wuliu_alert_events(project_id, created_at desc);
       create index if not exists idx_wuliu_alert_events_device_created on wuliu_alert_events(device_id, created_at desc);
+      create index if not exists idx_wuliu_route_corridors_project on wuliu_route_corridors(project_id);
     `;
   }
 
@@ -1040,6 +1126,7 @@ export class DataService {
       if (Array.isArray(parsed.locations)) this.locations = parsed.locations;
       if (Array.isArray(parsed.geofences)) this.geofences = parsed.geofences;
       if (Array.isArray(parsed.alerts)) this.alerts = parsed.alerts;
+      if (Array.isArray(parsed.routeCorridors)) this.routeCorridors = parsed.routeCorridors;
     } catch (error) {
       console.warn(`Could not load persisted data from ${file}:`, error);
     }
@@ -1058,6 +1145,7 @@ export class DataService {
       locations: this.locations,
       geofences: this.geofences,
       alerts: this.alerts,
+      routeCorridors: this.routeCorridors,
     };
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(tempFile, JSON.stringify(state, null, 2), 'utf8');
@@ -1165,6 +1253,23 @@ export class DataService {
     return geofence;
   }
 
+  private async findRouteCorridor(id: string): Promise<RouteCorridor> {
+    if (this.pool) {
+      await this.ready;
+      const result = await this.pool.query<RouteCorridorRow>('select * from wuliu_route_corridors where id = $1', [id]);
+      if (!result.rows[0]) {
+        throw new NotFoundException('Route corridor not found');
+      }
+      return this.routeCorridorFromRow(result.rows[0]);
+    }
+
+    const corridor = this.routeCorridors.find((item) => item.id === id);
+    if (!corridor) {
+      throw new NotFoundException('Route corridor not found');
+    }
+    return corridor;
+  }
+
   private nearbyFromRow(row: NearbyLocationRow): NearbyLocation {
     return {
       ...this.locationFromRow(row),
@@ -1188,6 +1293,19 @@ export class DataService {
       latitude: Number(row.latitude),
       distanceMeters: Math.round(Number(row.distance_meters)),
       message: row.message,
+      createdAt: toIso(row.created_at) ?? now(),
+    };
+  }
+
+  private routeCorridorFromRow(row: RouteCorridorRow): RouteCorridor {
+    const points = Array.isArray(row.route_points) ? row.route_points : JSON.parse(String(row.route_points));
+    return {
+      id: row.id,
+      projectId: row.project_id,
+      name: row.name,
+      route: this.normalizeRoute(points as RoutePointInput[]),
+      toleranceMeters: Number(row.tolerance_meters),
+      status: row.status,
       createdAt: toIso(row.created_at) ?? now(),
     };
   }
@@ -1315,6 +1433,14 @@ export class DataService {
     };
   }
 
+  private normalizeRoute(route: RoutePointInput[] | undefined): RouteCorridor['route'] {
+    return this.parseRoute(route).map((point) => ({
+      ...point,
+      lng: point.longitude,
+      lat: point.latitude,
+    }));
+  }
+
   private parseRoute(route: RoutePointInput[] | undefined): Array<{ longitude: number; latitude: number }> {
     if (!Array.isArray(route) || route.length < 2) {
       throw new BadRequestException('route must include at least two points');
@@ -1327,9 +1453,20 @@ export class DataService {
     });
   }
 
+  private routePointsForCalculation(corridor: RouteCorridor | undefined): Array<{ longitude: number; latitude: number }> {
+    if (!corridor) {
+      throw new BadRequestException('route or routeId is required');
+    }
+    if (corridor.status !== 'active') {
+      throw new BadRequestException('route corridor is paused');
+    }
+    return corridor.route.map((point) => ({ longitude: point.longitude, latitude: point.latitude }));
+  }
+
   private toRouteDeviationResult(
     deviceId: string,
     projectId: string | undefined,
+    routeId: string | undefined,
     toleranceMeters: number,
     measured: RouteDeviationPoint[],
   ): RouteDeviationResult {
@@ -1337,6 +1474,7 @@ export class DataService {
     return {
       deviceId,
       projectId,
+      routeId,
       toleranceMeters,
       checkedPoints: measured.length,
       deviatedPoints,

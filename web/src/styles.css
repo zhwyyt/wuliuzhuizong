@@ -75,7 +75,7 @@ textarea {
   padding: 10px 12px;
 }
 
-.login-panel button, .panel-title button, .inline-form button, .route-form button {
+.login-panel button, .panel-title button, .inline-form button, .route-form button, .route-saved-row button {
   min-height: 40px;
   display: inline-flex;
   align-items: center;
@@ -279,6 +279,13 @@ textarea {
   gap: 12px;
 }
 
+.route-saved-row {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) auto;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
 .route-result {
   min-height: 48px;
   display: flex;
@@ -461,7 +468,7 @@ textarea {
     padding: 12px;
   }
 
-  .inline-form, .geofence-form, .route-form, .device-row, .track-row, .fence-row, .alert-row, .screen-stats {
+  .inline-form, .geofence-form, .route-form, .route-saved-row, .device-row, .track-row, .fence-row, .alert-row, .screen-stats {
     grid-template-columns: 1fr;
   }
 

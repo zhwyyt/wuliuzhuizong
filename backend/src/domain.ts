@@ -113,6 +113,7 @@ export interface RoutePointInput {
 export interface RouteDeviationInput {
   deviceId?: string;
   projectId?: string;
+  routeId?: string;
   toleranceMeters?: number | string;
   route?: RoutePointInput[];
 }
@@ -124,10 +125,29 @@ export interface RouteDeviationPoint extends LocationPoint {
 export interface RouteDeviationResult {
   deviceId: string;
   projectId?: string;
+  routeId?: string;
   toleranceMeters: number;
   checkedPoints: number;
   deviatedPoints: RouteDeviationPoint[];
   maxDistanceMeters: number;
+}
+
+export interface RouteCorridor {
+  id: string;
+  projectId: string;
+  name: string;
+  route: Array<{ longitude: number; latitude: number; lng: number; lat: number }>;
+  toleranceMeters: number;
+  status: 'active' | 'paused';
+  createdAt: string;
+}
+
+export interface RouteCorridorInput {
+  projectId?: string;
+  name?: string;
+  route?: RoutePointInput[];
+  toleranceMeters?: number | string;
+  status?: 'active' | 'paused';
 }
 
 export interface LocationInput {

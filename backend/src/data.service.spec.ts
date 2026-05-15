@@ -302,6 +302,62 @@ test('routeDeviation validates route input', async () => {
   );
 });
 
+test('route corridors can be saved, listed, and reused for deviation checks', async () => {
+  const service = new DataService();
+  const corridor = await service.createRouteCorridor({
+    projectId: 'p-shanghai',
+    name: '上海测试路线',
+    toleranceMeters: 200,
+    route: [
+      { longitude: 120.1569, latitude: 30.7964 },
+      { longitude: 120.158, latitude: 30.797 },
+    ],
+  });
+
+  await service.createRouteCorridor({
+    projectId: 'p-hangzhou',
+    name: '杭州测试路线',
+    route: [
+      { longitude: 120.1, latitude: 30.1 },
+      { longitude: 120.2, latitude: 30.2 },
+    ],
+  });
+
+  await service.ingestLocation({
+    projectId: 'p-shanghai',
+    deviceId: 'd-saved-route',
+    deviceName: '保存路线测试手机',
+    longitude: 120.18,
+    latitude: 30.83,
+    appVersion: '0.2.0',
+  });
+
+  const routes = await service.listRouteCorridors('p-shanghai');
+  assert.equal(routes.length, 1);
+  assert.equal(routes[0].id, corridor.id);
+  assert.equal(routes[0].route[0].lng, 120.1569);
+
+  const result = await service.routeDeviation({ projectId: 'p-shanghai', deviceId: 'd-saved-route', routeId: corridor.id });
+  assert.equal(result.routeId, corridor.id);
+  assert.equal(result.toleranceMeters, 200);
+  assert.equal(result.deviatedPoints.length, 1);
+});
+
+test('paused route corridors cannot be used for deviation checks', async () => {
+  const service = new DataService();
+  const corridor = await service.createRouteCorridor({
+    projectId: 'p-shanghai',
+    name: '暂停路线',
+    status: 'paused',
+    route: [
+      { longitude: 120.1569, latitude: 30.7964 },
+      { longitude: 120.158, latitude: 30.797 },
+    ],
+  });
+
+  await assert.rejects(() => service.routeDeviation({ deviceId: 'd-route-check', routeId: corridor.id }), /route corridor is paused/);
+});
+
 test('ingestLocation creates unknown Android devices from payload metadata', async () => {
   const service = new DataService();
 

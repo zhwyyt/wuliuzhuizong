@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { DataService } from './data.service';
-import { Device, GeofenceInput, LocationInput, Project, RouteDeviationInput } from './domain';
+import { Device, GeofenceInput, LocationInput, Project, RouteCorridorInput, RouteDeviationInput } from './domain';
 import { RealtimeGateway } from './realtime.gateway';
 
 @Controller()
@@ -94,6 +94,16 @@ export class AppController {
   @Post('routes/deviation')
   async routeDeviation(@Body() body: RouteDeviationInput) {
     return this.data.routeDeviation(body);
+  }
+
+  @Get('routes')
+  async routes(@Query('projectId') projectId?: string) {
+    return this.data.listRouteCorridors(projectId);
+  }
+
+  @Post('routes')
+  async createRoute(@Body() body: RouteCorridorInput) {
+    return this.data.createRouteCorridor(body);
   }
 
   @Get('tracks')

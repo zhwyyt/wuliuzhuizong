@@ -33,6 +33,8 @@ REST is the default API style:
 - `POST /api/geofences`
 - `GET /api/geofences/:id/devices`
 - `GET /api/alerts`
+- `GET /api/routes`
+- `POST /api/routes`
 - `POST /api/routes/deviation`
 - `GET /api/tracks`
 - `GET /api/overview`
@@ -44,7 +46,7 @@ REST is the default API style:
 - Live location map with built-in fallback and optional AMap JS SDK mode.
 - Track replay.
 - Geofence creation and alert triage.
-- Route deviation checks from route corridor input.
+- Saved route corridors and route deviation checks.
 - Simulated App upload.
 
 WebSocket namespace:
@@ -67,12 +69,13 @@ Spatial query API:
 - PostgreSQL/PostGIS mode uses `ST_DWithin` and the `wuliu_locations.geog` GiST index against each Android device's latest point.
 - Circle geofence APIs store fence centers as `geography(Point, 4326)` when PostGIS is available, and evaluate latest project devices by distance.
 - Android uploads generate `geofence_enter` alert events when a point falls inside an active circle geofence.
-- `POST /api/routes/deviation` compares a device track against a route polyline and reports points outside the configured tolerance.
+- Saved route corridors are stored in `wuliu_route_corridors` with JSON route points and a project index.
+- `POST /api/routes/deviation` compares a device track against either an inline route polyline or a saved `routeId`, and reports points outside the configured tolerance.
 - JSON/test mode uses the same latest-point semantics with Haversine distance calculation.
 
 The next persistence upgrade is to expand spatial business logic:
 
-- Add saved route corridor persistence and route assignment workflow.
+- Add route assignment workflow for devices and projects.
 - Index by `device_id`, `project_id`, and timestamp.
 - Use spatial indexes for route corridor checks and large-screen aggregation.
 

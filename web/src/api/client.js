@@ -27,6 +27,8 @@ export const api = {
   ingestLocation: (point) => request('/locations', { method: 'POST', body: JSON.stringify(point) }),
   geofences: (projectId) => request(`/geofences${projectId ? `?projectId=${projectId}` : ''}`),
   createGeofence: (geofence) => request('/geofences', { method: 'POST', body: JSON.stringify(geofence) }),
+  routes: (projectId) => request(`/routes${projectId ? `?projectId=${projectId}` : ''}`),
+  createRoute: (route) => request('/routes', { method: 'POST', body: JSON.stringify(route) }),
   alerts: ({ projectId, deviceId, limit } = {}) => {
     const params = new URLSearchParams();
     if (projectId) params.set('projectId', projectId);

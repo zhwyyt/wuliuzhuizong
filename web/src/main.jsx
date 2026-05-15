@@ -171,14 +171,17 @@ function ConsolePage({ data, selectedProject, setSelectedProject, onRefresh }) {
   const [geofenceForm, setGeofenceForm] = useState({ name: '', longitude: '120.1569', latitude: '30.7964', radiusMeters: '1000' });
   const [trackDevice, setTrackDevice] = useState('d-1001');
   const [track, setTrack] = useState([]);
+  const [routeName, setRouteName] = useState('');
   const [routeText, setRouteText] = useState('120.1569,30.7964\n120.1580,30.7970');
   const [routeTolerance, setRouteTolerance] = useState('200');
+  const [selectedRouteId, setSelectedRouteId] = useState('');
   const [routeResult, setRouteResult] = useState(null);
 
   const filteredLatest = selectedProject ? data.latest.filter((point) => point.projectId === selectedProject) : data.latest;
   const filteredDevices = selectedProject ? data.devices.filter((device) => device.projectId === selectedProject) : data.devices;
   const filteredGeofences = selectedProject ? data.geofences.filter((geofence) => geofence.projectId === selectedProject) : data.geofences;
   const filteredAlerts = selectedProject ? data.alerts.filter((alert) => alert.projectId === selectedProject) : data.alerts;
+  const filteredRoutes = selectedProject ? data.routes.filter((route) => route.projectId === selectedProject) : data.routes;
 
   async function addProject(event) {
     event.preventDefault();
@@ -209,22 +212,36 @@ function ConsolePage({ data, selectedProject, setSelectedProject, onRefresh }) {
 
   async function checkRoute(event) {
     event.preventDefault();
-    const route = routeText
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => {
-        const [longitude, latitude] = line.split(',').map((item) => item.trim());
-        return { longitude, latitude };
-      });
     const deviceId = trackDevice || filteredDevices[0]?.id || data.devices[0]?.id;
     if (!deviceId) return;
     setRouteResult(await api.routeDeviation({
       projectId: selectedProject || undefined,
       deviceId,
+      routeId: selectedRouteId || undefined,
       toleranceMeters: routeTolerance,
-      route,
+      route: selectedRouteId ? undefined : parseRouteText(routeText),
     }));
+  }
+
+  async function saveRoute(event) {
+    event.preventDefault();
+    const route = await api.createRoute({
+      projectId: selectedProject || data.projects[0]?.id,
+      name: routeName,
+      toleranceMeters: routeTolerance,
+      route: parseRouteText(routeText),
+    });
+    setRouteName('');
+    setSelectedRouteId(route.id);
+    onRefresh();
+  }
+
+  function selectRoute(routeId) {
+    setSelectedRouteId(routeId);
+    const route = filteredRoutes.find((item) => item.id === routeId);
+    if (!route) return;
+    setRouteTolerance(String(route.toleranceMeters));
+    setRouteText(route.route.map((point) => `${point.longitude},${point.latitude}`).join('\n'));
   }
 
   async function simulateUpload() {
@@ -339,10 +356,18 @@ function ConsolePage({ data, selectedProject, setSelectedProject, onRefresh }) {
 
       <section className="panel route-panel">
         <div className="panel-title"><h2><LocateFixed size={20} /> 路线偏离</h2></div>
+        <div className="route-saved-row">
+          <select value={selectedRouteId} onChange={(event) => selectRoute(event.target.value)}>
+            <option value="">临时路线</option>
+            {filteredRoutes.map((route) => <option key={route.id} value={route.id}>{route.name}</option>)}
+          </select>
+          <input placeholder="路线名称" value={routeName} onChange={(event) => setRouteName(event.target.value)} />
+          <button type="button" onClick={saveRoute}><Plus size={16} /> 保存路线</button>
+        </div>
         <form className="route-form" onSubmit={checkRoute}>
           <label>
             路线坐标
-            <textarea value={routeText} onChange={(event) => setRouteText(event.target.value)} />
+            <textarea value={routeText} onChange={(event) => { setSelectedRouteId(''); setRouteText(event.target.value); }} />
           </label>
           <label>
             容差米
@@ -360,6 +385,17 @@ function ConsolePage({ data, selectedProject, setSelectedProject, onRefresh }) {
       </section>
     </div>
   );
+}
+
+function parseRouteText(routeText) {
+  return routeText
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [longitude, latitude] = line.split(',').map((item) => item.trim());
+      return { longitude, latitude };
+    });
 }
 
 function ScreenPage({ data, selectedProject, setSelectedProject }) {
@@ -405,20 +441,21 @@ function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('console');
   const [selectedProject, setSelectedProject] = useState('');
-  const [data, setData] = useState({ projects: [], devices: [], latest: [], overview: {}, geofences: [], alerts: [] });
+  const [data, setData] = useState({ projects: [], devices: [], latest: [], overview: {}, geofences: [], alerts: [], routes: [] });
   const [error, setError] = useState('');
 
   const refresh = useCallback(async (projectId = selectedProject) => {
     try {
-      const [projects, devices, latest, overview, geofences, alerts] = await Promise.all([
+      const [projects, devices, latest, overview, geofences, alerts, routes] = await Promise.all([
         api.projects(),
         api.devices(),
         api.latest(projectId),
         api.overview(projectId),
         api.geofences(projectId),
         api.alerts({ projectId, limit: 50 }),
+        api.routes(projectId),
       ]);
-      setData({ projects, devices, latest, overview, geofences, alerts });
+      setData({ projects, devices, latest, overview, geofences, alerts, routes });
       setError('');
     } catch (err) {
       setError(err.message);

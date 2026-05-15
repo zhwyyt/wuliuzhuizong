@@ -34,4 +34,5 @@
 - [x] Add geofence create/list/evaluate APIs using PostGIS.
 - [x] Add geofence alert events and route-deviation APIs using PostGIS.
 - [x] Add Web geofence, alert triage, and route-deviation check surfaces.
-- [ ] Add saved route corridor persistence and route assignment workflow.
+- [x] Add saved route corridor persistence and Web save/select workflow.
+- [ ] Add route assignment workflow for devices and projects.
