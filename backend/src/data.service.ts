@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { Pool } from 'pg';
-import { Device, DeviceStatus, LatestLocation, LocationInput, LocationPoint, NearbyLocation, Project, User } from './domain';
+import { Device, DeviceStatus, Geofence, GeofenceInput, LatestLocation, LocationInput, LocationPoint, NearbyLocation, Project, User } from './domain';
 
 const now = () => new Date().toISOString();
 const toNumber = (value: number | string | undefined, field: string): number => {
@@ -35,6 +35,7 @@ interface DataState {
   projects: Project[];
   devices: Device[];
   locations: LocationPoint[];
+  geofences: Geofence[];
 }
 
 type ProjectRow = {
@@ -80,6 +81,19 @@ type LocationRow = {
   timestamp: Date | string;
 };
 
+type GeofenceRow = {
+  id: string;
+  project_id: string;
+  name: string;
+  longitude: number;
+  latitude: number;
+  lng: number;
+  lat: number;
+  radius_meters: number;
+  status: Geofence['status'];
+  created_at: Date | string;
+};
+
 type NearbyLocationRow = LocationRow & {
   project_name?: string | null;
   device_name?: string | null;
@@ -115,6 +129,8 @@ export class DataService {
     this.point('d-2001', 120.1551, 30.2741, 36, 120, 'online', -8),
     this.point('d-3001', 120.5853, 31.2989, 8, 15, 'idle', -12),
   ];
+
+  private geofences: Geofence[] = [];
 
   constructor() {
     if (this.shouldUsePostgres()) {
@@ -485,6 +501,107 @@ export class DataService {
     return result.rows.map((row) => this.nearbyFromRow(row));
   }
 
+  async listGeofences(projectId?: string): Promise<Geofence[]> {
+    if (!this.pool) {
+      return this.geofences.filter((geofence) => !projectId || geofence.projectId === projectId);
+    }
+
+    await this.ready;
+    const params = projectId ? [projectId] : [];
+    const result = await this.pool.query<GeofenceRow>(
+      `
+      select *
+      from wuliu_geofences
+      ${projectId ? 'where project_id = $1' : ''}
+      order by created_at desc
+      `,
+      params,
+    );
+    return result.rows.map((row) => this.geofenceFromRow(row));
+  }
+
+  async createGeofence(input: GeofenceInput): Promise<Geofence> {
+    const projectId = input.projectId || this.projects[0]?.id;
+    await this.ensureProjectExists(projectId);
+    const longitude = toNumber(input.longitude ?? input.lng, 'longitude');
+    const latitude = toNumber(input.latitude ?? input.lat, 'latitude');
+    this.assertCoordinateRange(longitude, latitude);
+    const radiusMeters = input.radiusMeters === undefined ? DEFAULT_NEARBY_RADIUS_METERS : toNumber(input.radiusMeters, 'radiusMeters');
+    if (radiusMeters <= 0) {
+      throw new BadRequestException('radiusMeters must be greater than 0');
+    }
+
+    const geofence: Geofence = {
+      id: `gf-${Date.now()}`,
+      projectId,
+      name: input.name?.trim() || '新电子围栏',
+      longitude,
+      latitude,
+      lng: longitude,
+      lat: latitude,
+      radiusMeters,
+      status: input.status ?? 'active',
+      createdAt: now(),
+    };
+
+    if (this.pool) {
+      await this.ready;
+      const result = await this.pool.query<GeofenceRow>(
+        `
+        insert into wuliu_geofences (
+          id, project_id, name, longitude, latitude, lng, lat, radius_meters, status, created_at
+        ) values (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+        )
+        returning *
+        `,
+        [
+          geofence.id,
+          geofence.projectId,
+          geofence.name,
+          geofence.longitude,
+          geofence.latitude,
+          geofence.lng,
+          geofence.lat,
+          geofence.radiusMeters,
+          geofence.status,
+          geofence.createdAt,
+        ],
+      );
+      const created = this.geofenceFromRow(result.rows[0]);
+      if (this.postgisReady) {
+        await this.pool.query(
+          'update wuliu_geofences set geog = ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography where id = $1',
+          [created.id],
+        );
+      }
+      return created;
+    }
+
+    this.geofences.unshift(geofence);
+    this.saveState();
+    return geofence;
+  }
+
+  async geofenceDevices(id: string, limit?: number | string): Promise<{ geofence: Geofence; devices: NearbyLocation[] }> {
+    const parsedLimit = limit === undefined ? DEFAULT_NEARBY_LIMIT : Math.trunc(toNumber(limit, 'limit'));
+    if (parsedLimit <= 0 || parsedLimit > 500) {
+      throw new BadRequestException('limit must be between 1 and 500');
+    }
+    const geofence = await this.findGeofence(id);
+    if (geofence.status !== 'active') {
+      return { geofence, devices: [] };
+    }
+    const devices = await this.nearby({
+      longitude: geofence.longitude,
+      latitude: geofence.latitude,
+      radiusMeters: geofence.radiusMeters,
+      projectId: geofence.projectId,
+      limit: parsedLimit,
+    });
+    return { geofence, devices };
+  }
+
   async track(deviceId: string, projectId?: string): Promise<LocationPoint[]> {
     if (!this.pool) {
       return this.visibleLocations()
@@ -612,10 +729,24 @@ export class DataService {
         timestamp timestamptz not null
       );
 
+      create table if not exists wuliu_geofences (
+        id text primary key,
+        project_id text not null references wuliu_projects(id),
+        name text not null,
+        longitude double precision not null,
+        latitude double precision not null,
+        lng double precision not null,
+        lat double precision not null,
+        radius_meters double precision not null,
+        status text not null,
+        created_at timestamptz not null
+      );
+
       create index if not exists idx_wuliu_locations_device_timestamp on wuliu_locations(device_id, timestamp desc);
       create index if not exists idx_wuliu_locations_project_timestamp on wuliu_locations(project_id, timestamp desc);
       create index if not exists idx_wuliu_locations_source on wuliu_locations(source);
       create index if not exists idx_wuliu_devices_project on wuliu_devices(project_id);
+      create index if not exists idx_wuliu_geofences_project on wuliu_geofences(project_id);
     `;
   }
 
@@ -633,6 +764,16 @@ export class DataService {
         where geog is null
       `);
       await this.pool.query('create index if not exists idx_wuliu_locations_geog on wuliu_locations using gist(geog)');
+      await this.pool.query(`
+        alter table wuliu_geofences
+        add column if not exists geog geography(Point, 4326)
+      `);
+      await this.pool.query(`
+        update wuliu_geofences
+        set geog = ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography
+        where geog is null
+      `);
+      await this.pool.query('create index if not exists idx_wuliu_geofences_geog on wuliu_geofences using gist(geog)');
       this.postgisReady = true;
     } catch {
       this.postgisReady = false;
@@ -757,6 +898,7 @@ export class DataService {
       if (Array.isArray(parsed.projects)) this.projects = parsed.projects;
       if (Array.isArray(parsed.devices)) this.devices = parsed.devices;
       if (Array.isArray(parsed.locations)) this.locations = parsed.locations;
+      if (Array.isArray(parsed.geofences)) this.geofences = parsed.geofences;
     } catch (error) {
       console.warn(`Could not load persisted data from ${file}:`, error);
     }
@@ -773,6 +915,7 @@ export class DataService {
       projects: this.projects,
       devices: this.devices,
       locations: this.locations,
+      geofences: this.geofences,
     };
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(tempFile, JSON.stringify(state, null, 2), 'utf8');
@@ -846,6 +989,38 @@ export class DataService {
       receivedAt: toIso(row.received_at) ?? now(),
       timestamp: toIso(row.timestamp) ?? now(),
     };
+  }
+
+  private geofenceFromRow(row: GeofenceRow): Geofence {
+    return {
+      id: row.id,
+      projectId: row.project_id,
+      name: row.name,
+      longitude: Number(row.longitude),
+      latitude: Number(row.latitude),
+      lng: Number(row.lng),
+      lat: Number(row.lat),
+      radiusMeters: Number(row.radius_meters),
+      status: row.status,
+      createdAt: toIso(row.created_at) ?? now(),
+    };
+  }
+
+  private async findGeofence(id: string): Promise<Geofence> {
+    if (this.pool) {
+      await this.ready;
+      const result = await this.pool.query<GeofenceRow>('select * from wuliu_geofences where id = $1', [id]);
+      if (!result.rows[0]) {
+        throw new NotFoundException('Geofence not found');
+      }
+      return this.geofenceFromRow(result.rows[0]);
+    }
+
+    const geofence = this.geofences.find((item) => item.id === id);
+    if (!geofence) {
+      throw new NotFoundException('Geofence not found');
+    }
+    return geofence;
   }
 
   private nearbyFromRow(row: NearbyLocationRow): NearbyLocation {

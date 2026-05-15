@@ -2,6 +2,7 @@ export type ProjectStatus = 'active' | 'paused' | 'archived';
 export type DeviceStatus = 'online' | 'idle' | 'offline' | 'alert';
 export type DeviceType = 'phone' | 'vehicle' | 'tracker';
 export type LocationSource = 'android' | 'web-simulator' | 'seed';
+export type GeofenceStatus = 'active' | 'paused';
 
 export interface User {
   id: string;
@@ -60,6 +61,30 @@ export interface LatestLocation extends LocationPoint {
 
 export interface NearbyLocation extends LatestLocation {
   distanceMeters: number;
+}
+
+export interface Geofence {
+  id: string;
+  projectId: string;
+  name: string;
+  longitude: number;
+  latitude: number;
+  lng: number;
+  lat: number;
+  radiusMeters: number;
+  status: GeofenceStatus;
+  createdAt: string;
+}
+
+export interface GeofenceInput {
+  projectId?: string;
+  name?: string;
+  longitude?: number | string;
+  latitude?: number | string;
+  lng?: number | string;
+  lat?: number | string;
+  radiusMeters?: number | string;
+  status?: GeofenceStatus;
 }
 
 export interface LocationInput {

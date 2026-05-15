@@ -150,6 +150,59 @@ test('nearby supports project filtering and validates query bounds', async () =>
   await assert.rejects(() => service.nearby({ longitude: 120.1569, latitude: 30.7964, limit: 501 }), BadRequestException);
 });
 
+test('geofences can be created, listed, and evaluated against latest devices', async () => {
+  const service = new DataService();
+
+  await service.ingestLocation({
+    projectId: 'p-shanghai',
+    deviceId: 'd-geofence-inside',
+    deviceName: '围栏内测试手机',
+    longitude: 120.1569,
+    latitude: 30.7964,
+    appVersion: '0.2.0',
+  });
+  await service.ingestLocation({
+    projectId: 'p-shanghai',
+    deviceId: 'd-geofence-outside',
+    deviceName: '围栏外测试手机',
+    longitude: 120.25,
+    latitude: 30.9,
+    appVersion: '0.2.0',
+  });
+
+  const geofence = await service.createGeofence({
+    projectId: 'p-shanghai',
+    name: '杭州北测试围栏',
+    longitude: 120.1569,
+    latitude: 30.7964,
+    radiusMeters: 500,
+  });
+
+  assert.equal(geofence.name, '杭州北测试围栏');
+  assert.ok((await service.listGeofences('p-shanghai')).some((item) => item.id === geofence.id));
+
+  const result = await service.geofenceDevices(geofence.id);
+  assert.equal(result.geofence.id, geofence.id);
+  assert.deepEqual(result.devices.map((point) => point.deviceId), ['d-geofence-inside']);
+});
+
+test('paused geofences return no devices and invalid geofence inputs are rejected', async () => {
+  const service = new DataService();
+
+  const geofence = await service.createGeofence({
+    projectId: 'p-shanghai',
+    longitude: 120.1569,
+    latitude: 30.7964,
+    radiusMeters: 500,
+    status: 'paused',
+  });
+
+  assert.equal((await service.geofenceDevices(geofence.id)).devices.length, 0);
+  await assert.rejects(() => service.createGeofence({ projectId: 'p-shanghai', longitude: 120.1569, latitude: 91 }), BadRequestException);
+  await assert.rejects(() => service.createGeofence({ projectId: 'p-shanghai', longitude: 120.1569, latitude: 30.7964, radiusMeters: 0 }), BadRequestException);
+  await assert.rejects(() => service.geofenceDevices('missing-geofence'), /Geofence not found/);
+});
+
 test('ingestLocation creates unknown Android devices from payload metadata', async () => {
   const service = new DataService();
 

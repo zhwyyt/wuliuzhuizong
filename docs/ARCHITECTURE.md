@@ -28,6 +28,10 @@ REST is the default API style:
 - `POST /api/devices`
 - `POST /api/locations`
 - `GET /api/locations/latest`
+- `GET /api/locations/nearby`
+- `GET /api/geofences`
+- `POST /api/geofences`
+- `GET /api/geofences/:id/devices`
 - `GET /api/tracks`
 - `GET /api/overview`
 
@@ -49,11 +53,12 @@ Spatial query API:
 
 - `GET /api/locations/nearby` accepts `longitude`, `latitude`, optional `radiusMeters`, optional `projectId`, and optional `limit`.
 - PostgreSQL/PostGIS mode uses `ST_DWithin` and the `wuliu_locations.geog` GiST index against each Android device's latest point.
+- Circle geofence APIs store fence centers as `geography(Point, 4326)` when PostGIS is available, and evaluate latest project devices by distance.
 - JSON/test mode uses the same latest-point semantics with Haversine distance calculation.
 
 The next persistence upgrade is to expand spatial business logic:
 
-- Add geofence tables and alert rules.
+- Add geofence alert rules and route corridor tables.
 - Index by `device_id`, `project_id`, and timestamp.
 - Use spatial indexes for route corridor checks and large-screen aggregation.
 
