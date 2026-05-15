@@ -56,6 +56,9 @@ export interface LatestLocation extends LocationPoint {
 export interface LocationInput {
   projectId?: string;
   deviceId?: string;
+  deviceName?: string;
+  owner?: string;
+  phone?: string;
   longitude?: number | string;
   latitude?: number | string;
   lng?: number | string;

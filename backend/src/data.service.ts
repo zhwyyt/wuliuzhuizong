@@ -87,10 +87,7 @@ export class DataService {
   }
 
   ingestLocation(input: LocationInput): LatestLocation {
-    const device = this.devices.find((item) => item.id === input.deviceId);
-    if (!device) {
-      throw new NotFoundException('Device not found');
-    }
+    const device = this.resolveIngestDevice(input);
     if (input.projectId && input.projectId !== device.projectId) {
       throw new BadRequestException('projectId does not match device project');
     }
@@ -122,6 +119,31 @@ export class DataService {
     };
     this.locations.push(point);
     return this.toLatest(point);
+  }
+
+  private resolveIngestDevice(input: LocationInput): Device {
+    if (!input.deviceId?.trim()) {
+      throw new BadRequestException('deviceId is required');
+    }
+    const existing = this.devices.find((item) => item.id === input.deviceId);
+    if (existing) {
+      return existing;
+    }
+    const projectId = input.projectId || this.projects[0]?.id;
+    if (!this.projects.some((project) => project.id === projectId)) {
+      throw new NotFoundException('Project not found');
+    }
+    const device: Device = {
+      id: input.deviceId,
+      projectId,
+      name: input.deviceName?.trim() || input.deviceId,
+      type: 'phone',
+      owner: input.owner?.trim() || 'Android 采集端',
+      phone: input.phone?.trim() || '',
+      status: input.status ?? 'online',
+    };
+    this.devices.unshift(device);
+    return device;
   }
 
   latest(projectId?: string): LatestLocation[] {

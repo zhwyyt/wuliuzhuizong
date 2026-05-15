@@ -93,7 +93,7 @@ public class MainActivity extends Activity {
         deviceIdInput = new EditText(this);
         deviceIdInput.setHint("设备 ID");
         deviceIdInput.setSingleLine(true);
-        deviceIdInput.setText("d-1001");
+        deviceIdInput.setText("d-android-001");
         root.addView(deviceIdInput, fullWidth());
 
         deviceNameInput = new EditText(this);

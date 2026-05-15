@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { DataService } from './data.service';
 
 test('ingestLocation accepts longitude and latitude fields from Android clients', () => {
@@ -71,11 +71,18 @@ test('track returns timestamp-sorted points for one device', () => {
   assert.ok(track.every((point) => point.deviceId === 'd-1001'));
 });
 
-test('unknown device throws NotFoundException', () => {
+test('ingestLocation creates unknown Android devices from payload metadata', () => {
   const service = new DataService();
 
-  assert.throws(
-    () => service.ingestLocation({ deviceId: 'missing-device', longitude: 121.5, latitude: 31.2 }),
-    NotFoundException,
-  );
+  const point = service.ingestLocation({
+    projectId: 'p-shanghai',
+    deviceId: 'd-android-001',
+    deviceName: 'Android 测试手机',
+    longitude: 121.5,
+    latitude: 31.2,
+  });
+
+  assert.equal(point.deviceId, 'd-android-001');
+  assert.equal(point.deviceName, 'Android 测试手机');
+  assert.ok(service.listDevices('p-shanghai').some((device) => device.id === 'd-android-001'));
 });
