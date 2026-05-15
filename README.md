@@ -65,14 +65,32 @@ For a physical Android phone on the same LAN, replace `10.0.2.2` with the comput
 
 The Web app runs without an AMap key. In that mode it shows the built-in coordinate fallback map.
 
-To prepare for AMap integration, set this environment variable before starting the Web app:
+For local Web AMap JS API integration, create `web/.env.local` from `web/.env.example`:
+
+```dotenv
+VITE_AMAP_KEY="your-amap-web-js-key"
+VITE_AMAP_SECURITY_CODE="your-amap-web-js-security-code"
+```
+
+Then restart the Web dev server:
 
 ```powershell
-$env:VITE_AMAP_KEY="your-amap-web-js-key"
 npm run dev -w web
 ```
 
-The current MVP only exposes the configuration surface and fallback behavior. The production AMap JS SDK layer is a follow-up task after the demo loop is verified.
+For Android AMap location SDK integration, create `mobile/local.properties` from `mobile/local.properties.example`:
+
+```properties
+AMAP_ANDROID_KEY=your-android-platform-key
+```
+
+Then open `mobile/` in Android Studio and run Gradle Sync. The Android debug package name is:
+
+```text
+com.example.wuliugenzong
+```
+
+The current Android app uses AMap location first and falls back to system/demo coordinates if location is unavailable.
 
 ## 目录结构
 

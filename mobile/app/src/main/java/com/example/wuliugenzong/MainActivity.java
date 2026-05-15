@@ -16,6 +16,9 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import com.amap.api.location.AMapLocationClient;
+import com.amap.api.location.AMapLocationClientOption;
+
 import org.json.JSONObject;
 
 import java.io.OutputStream;
@@ -36,6 +39,7 @@ public class MainActivity extends Activity {
     private EditText deviceIdInput;
     private EditText deviceNameInput;
     private LocationManager locationManager;
+    private AMapLocationClient amapLocationClient;
     private Location lastLocation;
 
     private final Runnable uploadLoop = new Runnable() {
@@ -49,6 +53,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        AMapLocationClient.updatePrivacyShow(this, true, true);
+        AMapLocationClient.updatePrivacyAgree(this, true);
         locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
         setContentView(createContentView());
     }
@@ -56,6 +62,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         handler.removeCallbacks(uploadLoop);
+        stopAmapLocation();
         super.onDestroy();
     }
 
@@ -133,18 +140,24 @@ public class MainActivity extends Activity {
             return;
         }
         try {
+            startAmapLocation();
             locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 10_000, 10, locationListener);
-            locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 10_000, 10, locationListener);
             handler.removeCallbacks(uploadLoop);
             handler.post(uploadLoop);
-            statusView.setText("定位采集中，每 30 秒上报一次。");
+            statusView.setText("高德定位采集中，每 30 秒上报一次。");
         } catch (SecurityException ex) {
             statusView.setText("定位权限不可用：" + ex.getMessage());
+        } catch (Exception ex) {
+            statusView.setText("高德定位启动失败，使用系统定位兜底：" + ex.getMessage());
+            tryStartSystemLocation();
+            handler.removeCallbacks(uploadLoop);
+            handler.post(uploadLoop);
         }
     }
 
     private void stopCollecting() {
         handler.removeCallbacks(uploadLoop);
+        stopAmapLocation();
         if (locationManager != null) {
             locationManager.removeUpdates(locationListener);
         }
@@ -168,6 +181,49 @@ public class MainActivity extends Activity {
         lastLocation = location;
         statusView.setText("最新定位：" + location.getLongitude() + ", " + location.getLatitude());
     };
+
+    private void startAmapLocation() throws Exception {
+        stopAmapLocation();
+        amapLocationClient = new AMapLocationClient(getApplicationContext());
+        AMapLocationClientOption option = new AMapLocationClientOption();
+        option.setLocationMode(AMapLocationClientOption.AMapLocationMode.Hight_Accuracy);
+        option.setInterval(10_000);
+        option.setNeedAddress(false);
+        option.setMockEnable(true);
+        amapLocationClient.setLocationOption(option);
+        amapLocationClient.setLocationListener(location -> {
+            if (location == null || location.getErrorCode() != 0) {
+                String message = location == null ? "无定位结果" : location.getErrorInfo();
+                statusView.setText("高德定位失败：" + message);
+                return;
+            }
+            Location androidLocation = new Location("amap");
+            androidLocation.setLongitude(location.getLongitude());
+            androidLocation.setLatitude(location.getLatitude());
+            androidLocation.setSpeed(location.getSpeed());
+            androidLocation.setBearing(location.getBearing());
+            lastLocation = androidLocation;
+            statusView.setText("高德定位：" + location.getLongitude() + ", " + location.getLatitude());
+        });
+        amapLocationClient.startLocation();
+    }
+
+    private void stopAmapLocation() {
+        if (amapLocationClient != null) {
+            amapLocationClient.stopLocation();
+            amapLocationClient.onDestroy();
+            amapLocationClient = null;
+        }
+    }
+
+    private void tryStartSystemLocation() {
+        try {
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 10_000, 10, locationListener);
+            locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 10_000, 10, locationListener);
+        } catch (SecurityException ignored) {
+            statusView.setText("系统定位也不可用，将使用演示坐标上报。");
+        }
+    }
 
     private void uploadCurrentLocation() {
         Location location = lastLocation;

@@ -187,7 +187,7 @@ input, select {
   background: rgba(255,255,255,0.72);
 }
 
-.map-canvas {
+.map-canvas, .amap-canvas {
   width: 100%;
   height: 100%;
 }

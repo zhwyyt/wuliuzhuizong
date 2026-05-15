@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { io } from 'socket.io-client';
 import { Activity, AlertTriangle, BarChart3, Building2, Crosshair, LogIn, MapPin, MonitorUp, Plus, Radio, Route, Smartphone } from 'lucide-react';
@@ -6,6 +6,8 @@ import { api, realtimeUrl } from './api/client';
 import './styles.css';
 
 const AMAP_KEY = import.meta.env.VITE_AMAP_KEY || '';
+const AMAP_SECURITY_CODE = import.meta.env.VITE_AMAP_SECURITY_CODE || '';
+let amapLoader;
 
 const statusText = {
   online: '在线',
@@ -24,24 +26,93 @@ function Stat({ label, value, tone = 'default' }) {
 }
 
 function MiniMap({ points, track = [], selectedProject }) {
+  const mapRef = useRef(null);
+  const amapRef = useRef(null);
+  const overlayRef = useRef([]);
+  const [amapError, setAmapError] = useState('');
+  const useAmap = Boolean(AMAP_KEY && AMAP_SECURITY_CODE);
+  const getLng = (point) => point.lng ?? point.longitude;
+  const getLat = (point) => point.lat ?? point.latitude;
+
   const bounds = useMemo(() => {
     const all = [...points, ...track];
     if (!all.length) return { minLng: 119.8, maxLng: 121.8, minLat: 30, maxLat: 31.6 };
     return {
-      minLng: Math.min(...all.map((p) => p.lng)) - 0.05,
-      maxLng: Math.max(...all.map((p) => p.lng)) + 0.05,
-      minLat: Math.min(...all.map((p) => p.lat)) - 0.05,
-      maxLat: Math.max(...all.map((p) => p.lat)) + 0.05,
+      minLng: Math.min(...all.map((p) => getLng(p))) - 0.05,
+      maxLng: Math.max(...all.map((p) => getLng(p))) + 0.05,
+      minLat: Math.min(...all.map((p) => getLat(p))) - 0.05,
+      maxLat: Math.max(...all.map((p) => getLat(p))) + 0.05,
     };
   }, [points, track]);
 
   const projectPoints = selectedProject ? points.filter((point) => point.projectId === selectedProject) : points;
   const projectTrack = selectedProject ? track.filter((point) => point.projectId === selectedProject) : track;
-  const mapMode = AMAP_KEY ? 'AMap key configured' : 'Fallback coordinate map';
+  const mapMode = useAmap && !amapError ? '高德地图 JS API' : '内置坐标图层';
   const toXY = (point) => ({
-    x: ((point.lng - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * 100,
-    y: 100 - ((point.lat - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * 100,
+    x: ((getLng(point) - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * 100,
+    y: 100 - ((getLat(point) - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * 100,
   });
+
+  useEffect(() => {
+    if (!useAmap || !mapRef.current) return undefined;
+    let cancelled = false;
+    window._AMapSecurityConfig = { securityJsCode: AMAP_SECURITY_CODE };
+    amapLoader ||= new Promise((resolve, reject) => {
+      if (window.AMap) {
+        resolve(window.AMap);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = `https://webapi.amap.com/maps?v=2.0&key=${AMAP_KEY}`;
+      script.async = true;
+      script.onload = () => resolve(window.AMap);
+      script.onerror = () => reject(new Error('高德地图脚本加载失败'));
+      document.head.appendChild(script);
+    });
+
+    amapLoader
+      .then((AMap) => {
+        if (cancelled || !mapRef.current) return;
+        if (!amapRef.current) {
+          amapRef.current = new AMap.Map(mapRef.current, {
+            zoom: 10,
+            center: [121.4737, 31.2304],
+            viewMode: '2D',
+          });
+        }
+
+        overlayRef.current.forEach((overlay) => overlay.setMap(null));
+        overlayRef.current = [];
+        const visiblePoints = [...projectPoints, ...projectTrack];
+        if (projectTrack.length > 1) {
+          const path = projectTrack.map((point) => [getLng(point), getLat(point)]);
+          const polylineOverlay = new AMap.Polyline({
+            path,
+            strokeColor: '#0f9f6e',
+            strokeWeight: 5,
+          });
+          polylineOverlay.setMap(amapRef.current);
+          overlayRef.current.push(polylineOverlay);
+        }
+        projectPoints.forEach((point) => {
+          const marker = new AMap.Marker({
+            position: [getLng(point), getLat(point)],
+            title: point.deviceName || point.deviceId,
+          });
+          marker.setMap(amapRef.current);
+          overlayRef.current.push(marker);
+        });
+        if (visiblePoints.length) {
+          amapRef.current.setFitView(overlayRef.current, false, [48, 48, 48, 48]);
+        }
+        setAmapError('');
+      })
+      .catch((err) => setAmapError(err.message));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectPoints, projectTrack, useAmap]);
 
   const polyline = projectTrack.map((point) => {
     const { x, y } = toXY(point);
@@ -54,7 +125,7 @@ function MiniMap({ points, track = [], selectedProject }) {
         <span><MapPin size={16} /> {mapMode}</span>
         <span>{projectPoints.length} 个实时点</span>
       </div>
-      <svg className="map-canvas" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="实时位置地图">
+      {useAmap && !amapError ? <div ref={mapRef} className="amap-canvas" aria-label="高德实时位置地图" /> : <svg className="map-canvas" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="实时位置地图">
         <defs>
           <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
             <path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(80,105,130,0.18)" strokeWidth="0.35" />
@@ -66,10 +137,10 @@ function MiniMap({ points, track = [], selectedProject }) {
           const { x, y } = toXY(point);
           return <circle key={point.deviceId} cx={x} cy={y} r="2.6" className={`pin pin-${point.status}`} vectorEffect="non-scaling-stroke" />;
         })}
-      </svg>
+      </svg>}
       <div className="map-legend">
         <span>坐标范围：华东演示数据</span>
-        <span>{AMAP_KEY ? '高德 Key 已配置，下一阶段接入 AMap JS SDK 图层' : '未配置 VITE_AMAP_KEY，当前使用内置坐标图层'}</span>
+        <span>{useAmap && !amapError ? '高德地图已启用' : (amapError || '未配置高德 Web Key 和安全密钥，当前使用内置坐标图层')}</span>
       </div>
     </div>
   );
@@ -193,7 +264,7 @@ function ConsolePage({ data, selectedProject, setSelectedProject, onRefresh }) {
           {track.length ? track.map((point) => (
             <div key={point.id} className="track-row">
               <span>{new Date(point.timestamp).toLocaleTimeString()}</span>
-              <strong>{point.lng.toFixed(4)}, {point.lat.toFixed(4)}</strong>
+              <strong>{(point.lng ?? point.longitude).toFixed(4)}, {(point.lat ?? point.latitude).toFixed(4)}</strong>
               <em>{point.speed} km/h</em>
             </div>
           )) : <p className="muted">点击设备加载历史轨迹。</p>}

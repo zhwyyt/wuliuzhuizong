@@ -2,6 +2,12 @@ plugins {
     id "com.android.application"
 }
 
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { localProperties.load(it) }
+}
+
 android {
     namespace "com.example.wuliugenzong"
     compileSdk 35
@@ -12,5 +18,12 @@ android {
         targetSdk 35
         versionCode 1
         versionName "0.1.0"
+        manifestPlaceholders = [
+                AMAP_ANDROID_KEY: localProperties.getProperty("AMAP_ANDROID_KEY", "")
+        ]
     }
+}
+
+dependencies {
+    implementation "com.amap.api:location:latest.integration"
 }
