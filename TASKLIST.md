@@ -23,5 +23,5 @@
 - [x] Wire demo data and location upload flow.
 - [x] Run local verification.
 - [x] Document run addresses, completed scope, gaps, and next phase.
-- [ ] Complete Android Studio build verification.
+- [x] Complete Android Studio build verification.
 - [ ] Complete manual browser click-through verification if in-app browser automation is available.
