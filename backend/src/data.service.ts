@@ -321,7 +321,6 @@ export class DataService {
         where exists (
           select 1 from wuliu_locations l where l.device_id = d.id and l.source = 'android'
         )
-      )
       ), open_alerts as (
         select project_id, count(*)::int as alert_count
         from wuliu_alert_events
