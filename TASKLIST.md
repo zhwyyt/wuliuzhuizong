@@ -37,4 +37,5 @@
 - [x] Add saved route corridor persistence and Web save/select workflow.
 - [x] Add route assignment workflow for devices and projects.
 - [x] Add alert acknowledgement workflow and reporting aggregates.
-- [ ] Add project member roles, alert dispatch ownership, and exportable reports.
+- [x] Add project member roles, alert dispatch ownership, and exportable reports.
+- [ ] Add real authentication, project permissions, and device upload credentials.

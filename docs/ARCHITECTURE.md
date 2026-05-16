@@ -24,6 +24,8 @@ REST is the default API style:
 - `POST /api/auth/login`
 - `GET /api/projects`
 - `POST /api/projects`
+- `GET /api/members`
+- `POST /api/members`
 - `GET /api/devices`
 - `POST /api/devices`
 - `PATCH /api/devices/:id/route`
@@ -41,6 +43,7 @@ REST is the default API style:
 - `GET /api/tracks`
 - `GET /api/overview`
 - `GET /api/reports/summary`
+- `GET /api/reports/export`
 
 ## Web Console
 
@@ -51,6 +54,7 @@ REST is the default API style:
 - Geofence creation and alert triage.
 - Saved route corridors, device route assignments, and route deviation checks.
 - Alert acknowledgement/resolution and operations summary reporting.
+- Project member roles, alert dispatch ownership, and CSV report export.
 - Simulated App upload.
 
 WebSocket namespace:
@@ -74,6 +78,7 @@ Spatial query API:
 - Circle geofence APIs store fence centers as `geography(Point, 4326)` when PostGIS is available, and evaluate latest project devices by distance.
 - Android uploads generate `geofence_enter` alert events when a point falls inside an active circle geofence.
 - Alert events carry `open`, `acknowledged`, or `resolved` status plus handling operator, note, and timestamp.
+- Project members carry owner/manager/dispatcher/viewer roles and can be assigned as alert owners.
 - Saved route corridors are stored in `wuliu_route_corridors` with JSON route points and a project index.
 - Devices can store an optional `route_id` assignment; assigned route projects must match the device project.
 - `POST /api/routes/deviation` compares a device track against an inline route polyline, a saved `routeId`, or the device assigned route, and reports points outside the configured tolerance.
@@ -81,7 +86,7 @@ Spatial query API:
 
 The next persistence upgrade is to expand spatial business logic:
 
-- Add project member roles, alert dispatch ownership, and exportable reports.
+- Add real authentication, project permissions, and device upload credentials.
 - Index by `device_id`, `project_id`, and timestamp.
 - Use spatial indexes for route corridor checks and large-screen aggregation.
 

@@ -39,6 +39,7 @@ Superpowers MVP plan is complete. Phase 7 productionization has started with loc
 - Added saved route corridor persistence with `GET/POST /api/routes`, `routeId` deviation checks, and Web save/select controls.
 - Added device route assignment with `PATCH /api/devices/:id/route`; route deviation uses the assigned route by default.
 - Added alert acknowledgement/resolution with `PATCH /api/alerts/:id` and operations summary reporting at `GET /api/reports/summary`.
+- Added project member roles, alert dispatch ownership, and CSV report export at `GET /api/reports/export`.
 - Added local JSON persistence fallback at `backend/data/runtime.json`; tests continue to use memory-only state.
 - Verified PostgreSQL connection to the configured `wms` database and API location ingest/latest-location smoke checks.
 - Started local dev services successfully with backend on `http://localhost:4000/api` and Web on `http://127.0.0.1:5175`.
@@ -59,5 +60,4 @@ Superpowers MVP plan is complete. Phase 7 productionization has started with loc
 
 ## Next Steps
 
-- Add project member roles, alert dispatch ownership, and exportable reports.
 - Add real authentication, project permissions, and device upload credentials.

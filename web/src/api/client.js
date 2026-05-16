@@ -19,6 +19,8 @@ export const api = {
   login: (name) => request('/auth/login', { method: 'POST', body: JSON.stringify({ name }) }),
   projects: () => request('/projects'),
   createProject: (project) => request('/projects', { method: 'POST', body: JSON.stringify(project) }),
+  members: (projectId) => request(`/members${projectId ? `?projectId=${projectId}` : ''}`),
+  createMember: (member) => request('/members', { method: 'POST', body: JSON.stringify(member) }),
   devices: (projectId) => request(`/devices${projectId ? `?projectId=${projectId}` : ''}`),
   createDevice: (device) => request('/devices', { method: 'POST', body: JSON.stringify(device) }),
   assignDeviceRoute: (deviceId, routeId) => request(`/devices/${deviceId}/route`, { method: 'PATCH', body: JSON.stringify({ routeId }) }),
@@ -40,6 +42,7 @@ export const api = {
   },
   updateAlert: (alertId, input) => request(`/alerts/${alertId}`, { method: 'PATCH', body: JSON.stringify(input) }),
   reportSummary: (projectId) => request(`/reports/summary${projectId ? `?projectId=${projectId}` : ''}`),
+  reportExportUrl: (projectId) => `${API_BASE}/reports/export${projectId ? `?projectId=${projectId}` : ''}`,
   routeDeviation: (input) => request('/routes/deviation', { method: 'POST', body: JSON.stringify(input) }),
 };
 

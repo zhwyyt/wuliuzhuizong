@@ -234,7 +234,7 @@ textarea {
   grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
 }
 
-.device-list, .track-list, .fence-list, .alert-list {
+.device-list, .track-list, .fence-list, .alert-list, .member-list {
   display: grid;
   gap: 8px;
   max-height: 250px;
@@ -242,7 +242,7 @@ textarea {
   margin-bottom: 14px;
 }
 
-.device-row, .track-row, .fence-row, .alert-row {
+.device-row, .track-row, .fence-row, .alert-row, .member-row {
   min-height: 46px;
   display: grid;
   grid-template-columns: 0.7fr 1fr auto;
@@ -259,15 +259,19 @@ textarea {
   grid-template-columns: 0.7fr 1fr minmax(96px, 0.8fr) auto;
 }
 
-.alert-row {
-  grid-template-columns: minmax(120px, 1fr) minmax(110px, 0.8fr) auto auto auto auto;
+.member-row {
+  grid-template-columns: minmax(120px, 1fr) auto minmax(96px, 0.8fr);
 }
 
-.device-row span, .track-row span, .fence-row span, .alert-row span, .muted {
+.alert-row {
+  grid-template-columns: minmax(110px, 1fr) minmax(90px, 0.7fr) minmax(104px, 0.8fr) auto auto auto auto;
+}
+
+.device-row span, .track-row span, .fence-row span, .alert-row span, .member-row span, .muted {
   color: #677781;
 }
 
-.badge, .track-row em, .fence-row em, .alert-row em, .route-result em, .alert-status {
+.badge, .track-row em, .fence-row em, .alert-row em, .member-row em, .route-result em, .alert-status {
   font-style: normal;
   font-size: 13px;
 }

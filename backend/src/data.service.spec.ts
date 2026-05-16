@@ -275,6 +275,46 @@ test('alert events can be acknowledged and resolved', async () => {
   assert.equal((await service.listAlerts({ projectId: 'p-shanghai', status: 'resolved' })).length, 1);
 });
 
+test('project members can own alert dispatch', async () => {
+  const service = new DataService();
+  const member = await service.createMember({
+    projectId: 'p-shanghai',
+    name: '派单调度甲',
+    role: 'dispatcher',
+    phone: '13900009999',
+  });
+  const geofence = await service.createGeofence({
+    projectId: 'p-shanghai',
+    name: '派单测试围栏',
+    longitude: 120.1569,
+    latitude: 30.7964,
+    radiusMeters: 300,
+  });
+  await service.ingestLocation({
+    projectId: 'p-shanghai',
+    deviceId: 'd-alert-dispatch',
+    deviceName: '派单测试手机',
+    longitude: geofence.longitude,
+    latitude: geofence.latitude,
+    appVersion: '0.2.0',
+  });
+
+  assert.ok((await service.listMembers('p-shanghai')).some((item) => item.id === member.id));
+  const [alert] = await service.listAlerts({ projectId: 'p-shanghai', status: 'open' });
+  const dispatched = await service.updateAlert(alert.id, {
+    status: 'acknowledged',
+    assignedTo: member.id,
+    handledBy: '值班主管',
+    handledNote: '派单处理',
+  });
+  assert.equal(dispatched.assignedTo, member.id);
+  assert.equal(dispatched.assignedToName, member.name);
+  assert.equal(dispatched.status, 'acknowledged');
+
+  await assert.rejects(() => service.createMember({ projectId: 'p-shanghai', name: '坏角色', role: 'bad' as never }), BadRequestException);
+  await assert.rejects(() => service.updateAlert(alert.id, { assignedTo: 'missing-member' }), /Project member not found/);
+});
+
 test('reportSummary aggregates alerts, routes, geofences, and device assignments', async () => {
   const service = new DataService();
   const route = await service.createRouteCorridor({
@@ -309,6 +349,17 @@ test('reportSummary aggregates alerts, routes, geofences, and device assignments
   assert.equal(summary.routeTotal, 1);
   assert.equal(summary.openAlertTotal, 1);
   assert.equal(summary.alertTotal, 1);
+});
+
+test('report export returns csv metrics', async () => {
+  const service = new DataService();
+  const exported = await service.exportReport('p-shanghai');
+
+  assert.equal(typeof exported, 'string');
+  const csv = String(exported);
+  assert.match(csv, /"metric","value"/);
+  assert.match(csv, /"projectId","p-shanghai"/);
+  assert.match(csv, /"deviceTotal","0"/);
 });
 
 test('routeDeviation reports points outside the route corridor', async () => {

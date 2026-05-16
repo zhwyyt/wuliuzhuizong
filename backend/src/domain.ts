@@ -21,6 +21,24 @@ export interface Project {
   createdAt: string;
 }
 
+export type ProjectMemberRole = 'owner' | 'manager' | 'dispatcher' | 'viewer';
+
+export interface ProjectMember {
+  id: string;
+  projectId: string;
+  name: string;
+  role: ProjectMemberRole;
+  phone: string;
+  createdAt: string;
+}
+
+export interface ProjectMemberInput {
+  projectId?: string;
+  name?: string;
+  role?: ProjectMemberRole;
+  phone?: string;
+}
+
 export interface Device {
   id: string;
   projectId: string;
@@ -107,6 +125,8 @@ export interface AlertEvent {
   distanceMeters: number;
   message: string;
   status: AlertEventStatus;
+  assignedTo?: string;
+  assignedToName?: string;
   handledBy?: string;
   handledNote?: string;
   handledAt?: string;
@@ -115,6 +135,7 @@ export interface AlertEvent {
 
 export interface AlertEventUpdateInput {
   status?: AlertEventStatus;
+  assignedTo?: string | null;
   handledBy?: string;
   handledNote?: string;
 }

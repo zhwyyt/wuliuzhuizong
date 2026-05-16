@@ -15,6 +15,9 @@ import {
   LocationPoint,
   NearbyLocation,
   Project,
+  ProjectMember,
+  ProjectMemberInput,
+  ProjectMemberRole,
   ReportSummary,
   RouteCorridor,
   RouteCorridorInput,
@@ -56,6 +59,7 @@ type NearbyInput = {
 interface DataState {
   users: User[];
   projects: Project[];
+  members: ProjectMember[];
   devices: Device[];
   locations: LocationPoint[];
   geofences: Geofence[];
@@ -70,12 +74,23 @@ type AlertListInput = {
   limit?: number | string;
 };
 
+type ReportExportFormat = 'csv' | 'json';
+
 type ProjectRow = {
   id: string;
   name: string;
   region: string;
   description: string;
   status: Project['status'];
+  created_at: Date | string;
+};
+
+type ProjectMemberRow = {
+  id: string;
+  project_id: string;
+  name: string;
+  role: ProjectMemberRole;
+  phone: string;
   created_at: Date | string;
 };
 
@@ -147,6 +162,8 @@ type AlertEventRow = {
   distance_meters: number;
   message: string;
   status: AlertEventStatus;
+  assigned_to?: string | null;
+  assigned_to_name?: string | null;
   handled_by?: string | null;
   handled_note?: string | null;
   handled_at?: Date | string | null;
@@ -174,6 +191,12 @@ export class DataService {
     { id: 'p-shanghai', name: '上海冷链配送', region: '上海', description: '市内冷链配送演示项目', status: 'active', createdAt: now() },
     { id: 'p-hangzhou', name: '杭州同城运输', region: '杭州', description: '同城干线运输演示项目', status: 'active', createdAt: now() },
     { id: 'p-suzhou', name: '苏州仓配项目', region: '苏州', description: '仓配一体化演示项目', status: 'paused', createdAt: now() },
+  ];
+
+  private members: ProjectMember[] = [
+    { id: 'm-sh-admin', projectId: 'p-shanghai', name: '上海项目经理', role: 'manager', phone: '13900001001', createdAt: now() },
+    { id: 'm-sh-dispatch', projectId: 'p-shanghai', name: '上海调度员', role: 'dispatcher', phone: '13900001002', createdAt: now() },
+    { id: 'm-hz-dispatch', projectId: 'p-hangzhou', name: '杭州调度员', role: 'dispatcher', phone: '13900002001', createdAt: now() },
   ];
 
   private devices: Device[] = [
@@ -291,6 +314,56 @@ export class DataService {
     this.projects.unshift(project);
     this.saveState();
     return project;
+  }
+
+  async listMembers(projectId?: string): Promise<ProjectMember[]> {
+    if (this.pool) {
+      await this.ready;
+      const params: string[] = [];
+      const where = projectId ? 'where project_id = $1' : '';
+      if (projectId) params.push(projectId);
+      const result = await this.pool.query<ProjectMemberRow>(
+        `select * from wuliu_project_members ${where} order by created_at desc`,
+        params,
+      );
+      return result.rows.map((row) => this.memberFromRow(row));
+    }
+
+    return this.members
+      .filter((member) => !projectId || member.projectId === projectId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async createMember(input: ProjectMemberInput): Promise<ProjectMember> {
+    const projectId = input.projectId || this.projects[0]?.id;
+    await this.ensureProjectExists(projectId);
+    const name = input.name?.trim();
+    if (!name) {
+      throw new BadRequestException('name is required');
+    }
+    const role = input.role ?? 'dispatcher';
+    this.assertMemberRole(role);
+    const member: ProjectMember = {
+      id: `m-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      projectId,
+      name,
+      role,
+      phone: input.phone?.trim() || '',
+      createdAt: now(),
+    };
+
+    if (this.pool) {
+      await this.ready;
+      const result = await this.pool.query<ProjectMemberRow>(
+        'insert into wuliu_project_members (id, project_id, name, role, phone, created_at) values ($1, $2, $3, $4, $5, $6) returning *',
+        [member.id, member.projectId, member.name, member.role, member.phone, member.createdAt],
+      );
+      return this.memberFromRow(result.rows[0]);
+    }
+
+    this.members.unshift(member);
+    this.saveState();
+    return member;
   }
 
   async listDevices(projectId?: string): Promise<Device[]> {
@@ -752,6 +825,7 @@ export class DataService {
   async updateAlert(id: string, input: AlertEventUpdateInput): Promise<AlertEvent> {
     const status = input.status ?? 'acknowledged';
     this.assertAlertStatus(status);
+    const assignment = await this.resolveAlertAssignment(input.assignedTo);
     const handledAt = status === 'open' ? undefined : now();
     const handledBy = status === 'open' ? undefined : (input.handledBy?.trim() || this.users[0]?.name || '调度员');
     const handledNote = status === 'open' ? undefined : input.handledNote?.trim();
@@ -762,13 +836,15 @@ export class DataService {
         `
         update wuliu_alert_events
         set status = $2,
-            handled_by = $3,
-            handled_note = $4,
-            handled_at = $5
+            assigned_to = case when $3::boolean then $4 else assigned_to end,
+            assigned_to_name = case when $3::boolean then $5 else assigned_to_name end,
+            handled_by = $6,
+            handled_note = $7,
+            handled_at = $8
         where id = $1
         returning *
         `,
-        [id, status, handledBy ?? null, handledNote ?? null, handledAt ?? null],
+        [id, status, input.assignedTo !== undefined, assignment.assignedTo ?? null, assignment.assignedToName ?? null, handledBy ?? null, handledNote ?? null, handledAt ?? null],
       );
       if (!result.rows[0]) {
         throw new NotFoundException('Alert event not found');
@@ -781,6 +857,10 @@ export class DataService {
       throw new NotFoundException('Alert event not found');
     }
     alert.status = status;
+    if (input.assignedTo !== undefined) {
+      alert.assignedTo = assignment.assignedTo;
+      alert.assignedToName = assignment.assignedToName;
+    }
     alert.handledBy = handledBy;
     alert.handledNote = handledNote;
     alert.handledAt = handledAt;
@@ -955,6 +1035,34 @@ export class DataService {
     };
   }
 
+  async exportReport(projectId?: string, format: ReportExportFormat = 'csv'): Promise<string | ReportSummary> {
+    const summary = await this.reportSummary(projectId);
+    if (format === 'json') {
+      return summary;
+    }
+    if (format !== 'csv') {
+      throw new BadRequestException('format must be csv or json');
+    }
+    const rows = [
+      ['metric', 'value'],
+      ['projectId', summary.projectId ?? 'all'],
+      ['generatedAt', summary.generatedAt],
+      ['deviceTotal', String(summary.deviceTotal)],
+      ['onlineTotal', String(summary.onlineTotal)],
+      ['routeAssignedTotal', String(summary.routeAssignedTotal)],
+      ['routeUnassignedTotal', String(summary.routeUnassignedTotal)],
+      ['alertTotal', String(summary.alertTotal)],
+      ['openAlertTotal', String(summary.openAlertTotal)],
+      ['acknowledgedAlertTotal', String(summary.acknowledgedAlertTotal)],
+      ['resolvedAlertTotal', String(summary.resolvedAlertTotal)],
+      ['geofenceTotal', String(summary.geofenceTotal)],
+      ['activeGeofenceTotal', String(summary.activeGeofenceTotal)],
+      ['routeTotal', String(summary.routeTotal)],
+      ['activeRouteTotal', String(summary.activeRouteTotal)],
+    ];
+    return rows.map((row) => row.map((value) => `"${value.replace(/"/g, '""')}"`).join(',')).join('\n');
+  }
+
   private async initializePostgres(): Promise<void> {
     await this.ensureDatabase();
     this.pool = this.createPool(this.databaseName());
@@ -1007,6 +1115,15 @@ export class DataService {
         region text not null,
         description text not null default '',
         status text not null,
+        created_at timestamptz not null
+      );
+
+      create table if not exists wuliu_project_members (
+        id text primary key,
+        project_id text not null references wuliu_projects(id),
+        name text not null,
+        role text not null,
+        phone text not null default '',
         created_at timestamptz not null
       );
 
@@ -1074,6 +1191,8 @@ export class DataService {
         distance_meters double precision not null,
         message text not null,
         status text not null default 'open',
+        assigned_to text,
+        assigned_to_name text,
         handled_by text,
         handled_note text,
         handled_at timestamptz,
@@ -1082,6 +1201,12 @@ export class DataService {
 
       alter table wuliu_alert_events
       add column if not exists status text not null default 'open';
+
+      alter table wuliu_alert_events
+      add column if not exists assigned_to text;
+
+      alter table wuliu_alert_events
+      add column if not exists assigned_to_name text;
 
       alter table wuliu_alert_events
       add column if not exists handled_by text;
@@ -1105,12 +1230,14 @@ export class DataService {
       create index if not exists idx_wuliu_locations_device_timestamp on wuliu_locations(device_id, timestamp desc);
       create index if not exists idx_wuliu_locations_project_timestamp on wuliu_locations(project_id, timestamp desc);
       create index if not exists idx_wuliu_locations_source on wuliu_locations(source);
+      create index if not exists idx_wuliu_project_members_project on wuliu_project_members(project_id);
       create index if not exists idx_wuliu_devices_project on wuliu_devices(project_id);
       create index if not exists idx_wuliu_devices_route on wuliu_devices(route_id);
       create index if not exists idx_wuliu_geofences_project on wuliu_geofences(project_id);
       create index if not exists idx_wuliu_alert_events_project_created on wuliu_alert_events(project_id, created_at desc);
       create index if not exists idx_wuliu_alert_events_device_created on wuliu_alert_events(device_id, created_at desc);
       create index if not exists idx_wuliu_alert_events_status on wuliu_alert_events(status);
+      create index if not exists idx_wuliu_alert_events_assigned_to on wuliu_alert_events(assigned_to);
       create index if not exists idx_wuliu_route_corridors_project on wuliu_route_corridors(project_id);
     `;
   }
@@ -1156,6 +1283,12 @@ export class DataService {
       await this.pool.query(
         'insert into wuliu_projects (id, name, region, description, status, created_at) values ($1, $2, $3, $4, $5, $6) on conflict (id) do nothing',
         [project.id, project.name, project.region, project.description, project.status, project.createdAt],
+      );
+    }
+    for (const member of this.members) {
+      await this.pool.query(
+        'insert into wuliu_project_members (id, project_id, name, role, phone, created_at) values ($1, $2, $3, $4, $5, $6) on conflict (id) do nothing',
+        [member.id, member.projectId, member.name, member.role, member.phone, member.createdAt],
       );
     }
     for (const device of this.devices) {
@@ -1261,6 +1394,7 @@ export class DataService {
       const parsed = JSON.parse(readFileSync(file, 'utf8')) as Partial<DataState>;
       if (Array.isArray(parsed.users)) this.users = parsed.users;
       if (Array.isArray(parsed.projects)) this.projects = parsed.projects;
+      if (Array.isArray(parsed.members)) this.members = parsed.members;
       if (Array.isArray(parsed.devices)) this.devices = parsed.devices;
       if (Array.isArray(parsed.locations)) this.locations = parsed.locations;
       if (Array.isArray(parsed.geofences)) this.geofences = parsed.geofences;
@@ -1280,6 +1414,7 @@ export class DataService {
     const state: DataState = {
       users: this.users,
       projects: this.projects,
+      members: this.members,
       devices: this.devices,
       locations: this.locations,
       geofences: this.geofences,
@@ -1318,6 +1453,17 @@ export class DataService {
       region: row.region,
       description: row.description,
       status: row.status,
+      createdAt: toIso(row.created_at) ?? now(),
+    };
+  }
+
+  private memberFromRow(row: ProjectMemberRow): ProjectMember {
+    return {
+      id: row.id,
+      projectId: row.project_id,
+      name: row.name,
+      role: row.role,
+      phone: row.phone,
       createdAt: toIso(row.created_at) ?? now(),
     };
   }
@@ -1451,6 +1597,8 @@ export class DataService {
       distanceMeters: Math.round(Number(row.distance_meters)),
       message: row.message,
       status: row.status ?? 'open',
+      assignedTo: row.assigned_to ?? undefined,
+      assignedToName: row.assigned_to_name ?? undefined,
       handledBy: row.handled_by ?? undefined,
       handledNote: row.handled_note ?? undefined,
       handledAt: toIso(row.handled_at),
@@ -1631,6 +1779,36 @@ export class DataService {
     if (!['open', 'acknowledged', 'resolved'].includes(status)) {
       throw new BadRequestException('status must be open, acknowledged, or resolved');
     }
+  }
+
+  private assertMemberRole(role: string): asserts role is ProjectMemberRole {
+    if (!['owner', 'manager', 'dispatcher', 'viewer'].includes(role)) {
+      throw new BadRequestException('role must be owner, manager, dispatcher, or viewer');
+    }
+  }
+
+  private async resolveAlertAssignment(memberId: string | null | undefined): Promise<{ assignedTo?: string; assignedToName?: string }> {
+    if (memberId === undefined) {
+      return {};
+    }
+    if (memberId === null || memberId.trim() === '') {
+      return { assignedTo: undefined, assignedToName: undefined };
+    }
+    const id = memberId.trim();
+    const member = this.pool
+      ? (await this.pool.query<ProjectMemberRow>('select * from wuliu_project_members where id = $1', [id])).rows[0]
+      : undefined;
+    if (this.pool) {
+      if (!member) {
+        throw new NotFoundException('Project member not found');
+      }
+      return { assignedTo: member.id, assignedToName: member.name };
+    }
+    const memoryMember = this.members.find((item) => item.id === id);
+    if (!memoryMember) {
+      throw new NotFoundException('Project member not found');
+    }
+    return { assignedTo: memoryMember.id, assignedToName: memoryMember.name };
   }
 
   private toRouteDeviationResult(

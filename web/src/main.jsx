@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { io } from 'socket.io-client';
-import { Activity, AlertTriangle, BarChart3, Building2, CheckCircle2, Crosshair, LocateFixed, LogIn, MapPin, MonitorUp, Plus, Radio, Route, ShieldCheck, Smartphone } from 'lucide-react';
+import { Activity, AlertTriangle, BarChart3, Building2, CheckCircle2, Crosshair, Download, LocateFixed, LogIn, MapPin, MonitorUp, Plus, Radio, Route, ShieldCheck, Smartphone, Users } from 'lucide-react';
 import { api, realtimeUrl } from './api/client';
 import './styles.css';
 
@@ -20,6 +20,13 @@ const alertStatusText = {
   open: '待处理',
   acknowledged: '已确认',
   resolved: '已解决',
+};
+
+const memberRoleText = {
+  owner: '负责人',
+  manager: '经理',
+  dispatcher: '调度',
+  viewer: '观察',
 };
 
 function Stat({ label, value, tone = 'default' }) {
@@ -173,6 +180,7 @@ function Login({ onLogin }) {
 
 function ConsolePage({ user, data, selectedProject, setSelectedProject, onRefresh }) {
   const [projectForm, setProjectForm] = useState({ name: '', region: '', description: '' });
+  const [memberForm, setMemberForm] = useState({ name: '', role: 'dispatcher', phone: '' });
   const [deviceForm, setDeviceForm] = useState({ name: '', owner: '', phone: '' });
   const [geofenceForm, setGeofenceForm] = useState({ name: '', longitude: '120.1569', latitude: '30.7964', radiusMeters: '1000' });
   const [trackDevice, setTrackDevice] = useState('d-1001');
@@ -185,6 +193,7 @@ function ConsolePage({ user, data, selectedProject, setSelectedProject, onRefres
 
   const filteredLatest = selectedProject ? data.latest.filter((point) => point.projectId === selectedProject) : data.latest;
   const filteredDevices = selectedProject ? data.devices.filter((device) => device.projectId === selectedProject) : data.devices;
+  const filteredMembers = selectedProject ? data.members.filter((member) => member.projectId === selectedProject) : data.members;
   const filteredGeofences = selectedProject ? data.geofences.filter((geofence) => geofence.projectId === selectedProject) : data.geofences;
   const filteredAlerts = selectedProject ? data.alerts.filter((alert) => alert.projectId === selectedProject) : data.alerts;
   const filteredRoutes = selectedProject ? data.routes.filter((route) => route.projectId === selectedProject) : data.routes;
@@ -201,6 +210,13 @@ function ConsolePage({ user, data, selectedProject, setSelectedProject, onRefres
     event.preventDefault();
     await api.createDevice({ ...deviceForm, projectId: selectedProject || data.projects[0]?.id });
     setDeviceForm({ name: '', owner: '', phone: '' });
+    onRefresh();
+  }
+
+  async function addMember(event) {
+    event.preventDefault();
+    await api.createMember({ ...memberForm, projectId: selectedProject || data.projects[0]?.id });
+    setMemberForm({ name: '', role: 'dispatcher', phone: '' });
     onRefresh();
   }
 
@@ -259,6 +275,20 @@ function ConsolePage({ user, data, selectedProject, setSelectedProject, onRefres
     onRefresh();
   }
 
+  async function assignAlert(alertId, assignedTo) {
+    await api.updateAlert(alertId, {
+      status: 'acknowledged',
+      assignedTo: assignedTo || null,
+      handledBy: user?.name || '调度员',
+      handledNote: assignedTo ? '已派单给项目成员' : '已取消派单',
+    });
+    onRefresh();
+  }
+
+  function downloadReport() {
+    window.open(api.reportExportUrl(selectedProject), '_blank', 'noopener,noreferrer');
+  }
+
   function selectRoute(routeId) {
     setSelectedRouteId(routeId);
     const route = filteredRoutes.find((item) => item.id === routeId);
@@ -309,6 +339,30 @@ function ConsolePage({ user, data, selectedProject, setSelectedProject, onRefres
           <input placeholder="区域" value={projectForm.region} onChange={(e) => setProjectForm({ ...projectForm, region: e.target.value })} />
           <input placeholder="描述" value={projectForm.description} onChange={(e) => setProjectForm({ ...projectForm, description: e.target.value })} />
           <button><Plus size={16} /> 新建</button>
+        </form>
+      </section>
+
+      <section className="panel">
+        <div className="panel-title"><h2><Users size={20} /> 项目成员</h2></div>
+        <div className="member-list">
+          {filteredMembers.length ? filteredMembers.map((member) => (
+            <div key={member.id} className="member-row">
+              <strong>{member.name}</strong>
+              <span>{memberRoleText[member.role] || member.role}</span>
+              <em>{member.phone || '未填手机号'}</em>
+            </div>
+          )) : <p className="muted">暂无项目成员。</p>}
+        </div>
+        <form className="inline-form" onSubmit={addMember}>
+          <input placeholder="姓名" value={memberForm.name} onChange={(e) => setMemberForm({ ...memberForm, name: e.target.value })} />
+          <select value={memberForm.role} onChange={(e) => setMemberForm({ ...memberForm, role: e.target.value })}>
+            <option value="dispatcher">调度</option>
+            <option value="manager">经理</option>
+            <option value="owner">负责人</option>
+            <option value="viewer">观察</option>
+          </select>
+          <input placeholder="手机号" value={memberForm.phone} onChange={(e) => setMemberForm({ ...memberForm, phone: e.target.value })} />
+          <button><Plus size={16} /> 添加</button>
         </form>
       </section>
 
@@ -372,6 +426,12 @@ function ConsolePage({ user, data, selectedProject, setSelectedProject, onRefres
             <div key={alert.id} className="alert-row">
               <strong>{alert.geofenceName}</strong>
               <span>{alert.deviceId}</span>
+              <select value={alert.assignedTo || ''} onChange={(event) => assignAlert(alert.id, event.target.value)}>
+                <option value="">未派单</option>
+                {data.members
+                  .filter((member) => member.projectId === alert.projectId)
+                  .map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
+              </select>
               <span className={`alert-status alert-status-${alert.status}`}>{alertStatusText[alert.status] || alert.status}</span>
               <em>{alert.distanceMeters}m</em>
               {alert.status === 'open' && <button type="button" onClick={() => handleAlert(alert.id, 'acknowledged')}><CheckCircle2 size={15} /> 确认</button>}
@@ -382,7 +442,10 @@ function ConsolePage({ user, data, selectedProject, setSelectedProject, onRefres
       </section>
 
       <section className="panel">
-        <div className="panel-title"><h2><BarChart3 size={20} /> 运营报表</h2></div>
+        <div className="panel-title">
+          <h2><BarChart3 size={20} /> 运营报表</h2>
+          <button type="button" onClick={downloadReport}><Download size={16} /> 导出 CSV</button>
+        </div>
         <div className="report-grid">
           <Stat label="待处理告警" value={data.summary.openAlertTotal ?? 0} tone="bad" />
           <Stat label="已确认" value={data.summary.acknowledgedAlertTotal ?? 0} />
@@ -481,13 +544,14 @@ function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('console');
   const [selectedProject, setSelectedProject] = useState('');
-  const [data, setData] = useState({ projects: [], devices: [], latest: [], overview: {}, geofences: [], alerts: [], routes: [], summary: {} });
+  const [data, setData] = useState({ projects: [], members: [], devices: [], latest: [], overview: {}, geofences: [], alerts: [], routes: [], summary: {} });
   const [error, setError] = useState('');
 
   const refresh = useCallback(async (projectId = selectedProject) => {
     try {
-      const [projects, devices, latest, overview, geofences, alerts, routes, summary] = await Promise.all([
+      const [projects, members, devices, latest, overview, geofences, alerts, routes, summary] = await Promise.all([
         api.projects(),
+        api.members(projectId),
         api.devices(),
         api.latest(projectId),
         api.overview(projectId),
@@ -496,7 +560,7 @@ function App() {
         api.routes(projectId),
         api.reportSummary(projectId),
       ]);
-      setData({ projects, devices, latest, overview, geofences, alerts, routes, summary });
+      setData({ projects, members, devices, latest, overview, geofences, alerts, routes, summary });
       setError('');
     } catch (err) {
       setError(err.message);

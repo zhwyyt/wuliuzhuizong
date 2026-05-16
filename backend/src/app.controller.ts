@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Patch, Post, Query } from '@nestjs/common';
 import { DataService } from './data.service';
-import { AlertEventUpdateInput, Device, DeviceRouteAssignmentInput, GeofenceInput, LocationInput, Project, RouteCorridorInput, RouteDeviationInput } from './domain';
+import { AlertEventUpdateInput, Device, DeviceRouteAssignmentInput, GeofenceInput, LocationInput, Project, ProjectMemberInput, RouteCorridorInput, RouteDeviationInput } from './domain';
 import { RealtimeGateway } from './realtime.gateway';
 
 @Controller()
@@ -31,6 +31,16 @@ export class AppController {
   @Post('projects')
   async createProject(@Body() body: Partial<Project>) {
     return this.data.createProject(body);
+  }
+
+  @Get('members')
+  async members(@Query('projectId') projectId?: string) {
+    return this.data.listMembers(projectId);
+  }
+
+  @Post('members')
+  async createMember(@Body() body: ProjectMemberInput) {
+    return this.data.createMember(body);
   }
 
   @Get('devices')
@@ -129,5 +139,11 @@ export class AppController {
   @Get('reports/summary')
   async reportSummary(@Query('projectId') projectId?: string) {
     return this.data.reportSummary(projectId);
+  }
+
+  @Get('reports/export')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  async reportExport(@Query('projectId') projectId?: string) {
+    return this.data.exportReport(projectId, 'csv');
   }
 }
