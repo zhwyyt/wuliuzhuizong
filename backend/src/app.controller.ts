@@ -63,7 +63,9 @@ export class AppController {
 
   @Patch('devices/:id/route')
   async assignDeviceRoute(@Headers('authorization') authorization: string | undefined, @Param('id') id: string, @Body() body: DeviceRouteAssignmentInput) {
-    this.currentUser(authorization);
+    const user = this.currentUser(authorization);
+    const device = await this.data.findDevice(id);
+    this.assertProjectAccess(user, device.projectId);
     return this.data.assignDeviceRoute(id, body.routeId);
   }
 
@@ -115,7 +117,9 @@ export class AppController {
 
   @Get('geofences/:id/devices')
   async geofenceDevices(@Headers('authorization') authorization: string | undefined, @Param('id') id: string, @Query('limit') limit?: string) {
-    this.currentUser(authorization);
+    const user = this.currentUser(authorization);
+    const geofence = await this.data.findGeofence(id);
+    this.assertProjectAccess(user, geofence.projectId);
     return this.data.geofenceDevices(id, limit);
   }
 
@@ -127,14 +131,21 @@ export class AppController {
 
   @Patch('alerts/:id')
   async updateAlert(@Headers('authorization') authorization: string | undefined, @Param('id') id: string, @Body() body: AlertEventUpdateInput) {
-    this.currentUser(authorization);
+    const user = this.currentUser(authorization);
+    const alert = await this.data.findAlertEvent(id);
+    this.assertProjectAccess(user, alert.projectId);
     return this.data.updateAlert(id, body);
   }
 
   @Post('routes/deviation')
   async routeDeviation(@Headers('authorization') authorization: string | undefined, @Body() body: RouteDeviationInput) {
     const user = this.currentUser(authorization);
-    this.assertProjectAccess(user, body.projectId);
+    if (body.deviceId) {
+      const device = await this.data.findDevice(body.deviceId);
+      this.assertProjectAccess(user, device.projectId);
+    } else {
+      this.assertProjectAccess(user, body.projectId);
+    }
     return this.data.routeDeviation(body);
   }
 

@@ -39,4 +39,4 @@
 - [x] Add alert acknowledgement workflow and reporting aggregates.
 - [x] Add project member roles, alert dispatch ownership, and exportable reports.
 - [x] Add real authentication, project permissions, and device upload credentials.
-- [ ] Tighten per-resource permission checks for route/device/alert mutations.
+- [x] Tighten per-resource permission checks for route/device/alert mutations.

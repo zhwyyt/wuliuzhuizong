@@ -1588,7 +1588,24 @@ export class DataService {
     };
   }
 
-  private async findGeofence(id: string): Promise<Geofence> {
+  async findAlertEvent(id: string): Promise<AlertEvent> {
+    if (this.pool) {
+      await this.ready;
+      const result = await this.pool.query<AlertEventRow>('select * from wuliu_alert_events where id = $1', [id]);
+      if (!result.rows[0]) {
+        throw new NotFoundException('Alert event not found');
+      }
+      return this.alertFromRow(result.rows[0]);
+    }
+
+    const alert = this.alerts.find((event) => event.id === id);
+    if (!alert) {
+      throw new NotFoundException('Alert event not found');
+    }
+    return alert;
+  }
+
+  async findGeofence(id: string): Promise<Geofence> {
     if (this.pool) {
       await this.ready;
       const result = await this.pool.query<GeofenceRow>('select * from wuliu_geofences where id = $1', [id]);
@@ -1605,7 +1622,7 @@ export class DataService {
     return geofence;
   }
 
-  private async findDevice(id: string): Promise<Device> {
+  async findDevice(id: string): Promise<Device> {
     if (this.pool) {
       await this.ready;
       const result = await this.pool.query<DeviceRow>('select * from wuliu_devices where id = $1', [id]);
@@ -1622,7 +1639,7 @@ export class DataService {
     return device;
   }
 
-  private async findRouteCorridor(id: string): Promise<RouteCorridor> {
+  async findRouteCorridor(id: string): Promise<RouteCorridor> {
     if (this.pool) {
       await this.ready;
       const result = await this.pool.query<RouteCorridorRow>('select * from wuliu_route_corridors where id = $1', [id]);

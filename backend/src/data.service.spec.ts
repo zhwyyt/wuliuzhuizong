@@ -1,10 +1,13 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { DataService } from './data.service';
+import { AppController } from './app.controller';
+
+const realtimeStub = { publishLocation() {} };
 
 test('login issues session tokens and maps project members to scoped operators', async () => {
   const service = new DataService();
@@ -43,6 +46,23 @@ test('Android device uploads require the matching device token when requested', 
     appVersion: '0.2.0',
   }, { requireDeviceToken: true, deviceToken: device.deviceToken });
   assert.equal(point.deviceId, device.id);
+});
+
+test('controller denies scoped operators from mutating resources in another project', async () => {
+  const service = new DataService();
+  const controller = new AppController(service, realtimeStub as never);
+  const login = await controller.login({ name: '上海调度员' });
+  const authorization = `Bearer ${login.token}`;
+  const hangzhouDevice = await service.createDevice({ projectId: 'p-hangzhou', name: '杭州权限测试设备' });
+
+  await assert.rejects(
+    () => controller.assignDeviceRoute(authorization, hangzhouDevice.id, { routeId: null }),
+    ForbiddenException,
+  );
+  await assert.rejects(
+    () => controller.createProject(authorization, { name: '越权项目', region: '测试', description: '' }),
+    ForbiddenException,
+  );
 });
 
 test('ingestLocation accepts longitude and latitude fields from Android clients', async () => {
