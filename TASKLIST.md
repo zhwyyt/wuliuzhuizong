@@ -24,7 +24,7 @@
 - [x] Run local verification.
 - [x] Document run addresses, completed scope, gaps, and next phase.
 - [x] Complete Android Studio build verification.
-- [ ] Complete manual browser click-through verification when in-app browser automation is stable.
+- [x] Complete manual browser click-through verification with independent Playwright.
 - [x] Start Superpowers phase 7 productionization.
 - [x] Add local persistent runtime data store.
 - [x] Add PostgreSQL runtime persistence.
@@ -40,3 +40,6 @@
 - [x] Add project member roles, alert dispatch ownership, and exportable reports.
 - [x] Add real authentication, project permissions, and device upload credentials.
 - [x] Tighten per-resource permission checks for route/device/alert mutations.
+- [x] Upgrade Android app with login, project loading, device binding, and saved upload credentials.
+- [x] Add Android foreground tracking service for background location upload.
+- [ ] Run physical Android field test over LAN/Tailscale.
