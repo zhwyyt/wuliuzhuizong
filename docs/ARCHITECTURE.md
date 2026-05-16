@@ -34,11 +34,13 @@ REST is the default API style:
 - `POST /api/geofences`
 - `GET /api/geofences/:id/devices`
 - `GET /api/alerts`
+- `PATCH /api/alerts/:id`
 - `GET /api/routes`
 - `POST /api/routes`
 - `POST /api/routes/deviation`
 - `GET /api/tracks`
 - `GET /api/overview`
+- `GET /api/reports/summary`
 
 ## Web Console
 
@@ -48,6 +50,7 @@ REST is the default API style:
 - Track replay.
 - Geofence creation and alert triage.
 - Saved route corridors, device route assignments, and route deviation checks.
+- Alert acknowledgement/resolution and operations summary reporting.
 - Simulated App upload.
 
 WebSocket namespace:
@@ -70,6 +73,7 @@ Spatial query API:
 - PostgreSQL/PostGIS mode uses `ST_DWithin` and the `wuliu_locations.geog` GiST index against each Android device's latest point.
 - Circle geofence APIs store fence centers as `geography(Point, 4326)` when PostGIS is available, and evaluate latest project devices by distance.
 - Android uploads generate `geofence_enter` alert events when a point falls inside an active circle geofence.
+- Alert events carry `open`, `acknowledged`, or `resolved` status plus handling operator, note, and timestamp.
 - Saved route corridors are stored in `wuliu_route_corridors` with JSON route points and a project index.
 - Devices can store an optional `route_id` assignment; assigned route projects must match the device project.
 - `POST /api/routes/deviation` compares a device track against an inline route polyline, a saved `routeId`, or the device assigned route, and reports points outside the configured tolerance.
@@ -77,7 +81,7 @@ Spatial query API:
 
 The next persistence upgrade is to expand spatial business logic:
 
-- Add alert acknowledgement workflow and reporting aggregates.
+- Add project member roles, alert dispatch ownership, and exportable reports.
 - Index by `device_id`, `project_id`, and timestamp.
 - Use spatial indexes for route corridor checks and large-screen aggregation.
 

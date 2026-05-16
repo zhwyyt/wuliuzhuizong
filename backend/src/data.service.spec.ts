@@ -237,6 +237,78 @@ test('android location uploads create geofence alert events', async () => {
   assert.equal(alerts[0].geofenceId, geofence.id);
   assert.equal(alerts[0].deviceId, 'd-alert-inside');
   assert.equal(alerts[0].distanceMeters, 0);
+  assert.equal(alerts[0].status, 'open');
+});
+
+test('alert events can be acknowledged and resolved', async () => {
+  const service = new DataService();
+  const geofence = await service.createGeofence({
+    projectId: 'p-shanghai',
+    name: '处置测试围栏',
+    longitude: 120.1569,
+    latitude: 30.7964,
+    radiusMeters: 300,
+  });
+  await service.ingestLocation({
+    projectId: 'p-shanghai',
+    deviceId: 'd-alert-handle',
+    deviceName: '告警处置测试手机',
+    longitude: geofence.longitude,
+    latitude: geofence.latitude,
+    appVersion: '0.2.0',
+  });
+
+  const [alert] = await service.listAlerts({ projectId: 'p-shanghai', status: 'open' });
+  const acknowledged = await service.updateAlert(alert.id, {
+    status: 'acknowledged',
+    handledBy: '调度甲',
+    handledNote: '已电话确认',
+  });
+  assert.equal(acknowledged.status, 'acknowledged');
+  assert.equal(acknowledged.handledBy, '调度甲');
+  assert.equal(acknowledged.handledNote, '已电话确认');
+  assert.ok(acknowledged.handledAt);
+  assert.equal((await service.listAlerts({ projectId: 'p-shanghai', status: 'open' })).length, 0);
+
+  const resolved = await service.updateAlert(alert.id, { status: 'resolved', handledBy: '调度乙' });
+  assert.equal(resolved.status, 'resolved');
+  assert.equal((await service.listAlerts({ projectId: 'p-shanghai', status: 'resolved' })).length, 1);
+});
+
+test('reportSummary aggregates alerts, routes, geofences, and device assignments', async () => {
+  const service = new DataService();
+  const route = await service.createRouteCorridor({
+    projectId: 'p-shanghai',
+    name: '报表路线',
+    route: [
+      { longitude: 120.1569, latitude: 30.7964 },
+      { longitude: 120.158, latitude: 30.797 },
+    ],
+  });
+  const device = await service.createDevice({ projectId: 'p-shanghai', name: '报表设备' });
+  await service.assignDeviceRoute(device.id, route.id);
+  const geofence = await service.createGeofence({
+    projectId: 'p-shanghai',
+    name: '报表围栏',
+    longitude: 120.1569,
+    latitude: 30.7964,
+    radiusMeters: 300,
+  });
+  await service.ingestLocation({
+    projectId: 'p-shanghai',
+    deviceId: device.id,
+    longitude: geofence.longitude,
+    latitude: geofence.latitude,
+    appVersion: '0.2.0',
+  });
+
+  const summary = await service.reportSummary('p-shanghai');
+  assert.equal(summary.deviceTotal, 1);
+  assert.equal(summary.routeAssignedTotal, 1);
+  assert.equal(summary.geofenceTotal, 1);
+  assert.equal(summary.routeTotal, 1);
+  assert.equal(summary.openAlertTotal, 1);
+  assert.equal(summary.alertTotal, 1);
 });
 
 test('routeDeviation reports points outside the route corridor', async () => {

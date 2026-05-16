@@ -36,4 +36,5 @@
 - [x] Add Web geofence, alert triage, and route-deviation check surfaces.
 - [x] Add saved route corridor persistence and Web save/select workflow.
 - [x] Add route assignment workflow for devices and projects.
-- [ ] Add alert acknowledgement workflow and reporting aggregates.
+- [x] Add alert acknowledgement workflow and reporting aggregates.
+- [ ] Add project member roles, alert dispatch ownership, and exportable reports.

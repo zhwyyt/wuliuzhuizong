@@ -75,7 +75,7 @@ textarea {
   padding: 10px 12px;
 }
 
-.login-panel button, .panel-title button, .inline-form button, .route-form button, .route-saved-row button {
+.login-panel button, .panel-title button, .inline-form button, .route-form button, .route-saved-row button, .alert-row button {
   min-height: 40px;
   display: inline-flex;
   align-items: center;
@@ -259,13 +259,35 @@ textarea {
   grid-template-columns: 0.7fr 1fr minmax(96px, 0.8fr) auto;
 }
 
+.alert-row {
+  grid-template-columns: minmax(120px, 1fr) minmax(110px, 0.8fr) auto auto auto auto;
+}
+
 .device-row span, .track-row span, .fence-row span, .alert-row span, .muted {
   color: #677781;
 }
 
-.badge, .track-row em, .fence-row em, .alert-row em, .route-result em {
+.badge, .track-row em, .fence-row em, .alert-row em, .route-result em, .alert-status {
   font-style: normal;
   font-size: 13px;
+}
+
+.alert-status {
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #edf3f5;
+  color: #51616a;
+}
+
+.alert-status-open { background: #fff1f0; color: #b4232d; }
+.alert-status-acknowledged { background: #fff7e6; color: #946200; }
+.alert-status-resolved { background: #e9f7ef; color: #0f7660; }
+
+.report-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .geofence-form {

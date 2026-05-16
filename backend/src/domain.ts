@@ -4,6 +4,7 @@ export type DeviceType = 'phone' | 'vehicle' | 'tracker';
 export type LocationSource = 'android' | 'web-simulator' | 'seed';
 export type GeofenceStatus = 'active' | 'paused';
 export type AlertEventType = 'geofence_enter';
+export type AlertEventStatus = 'open' | 'acknowledged' | 'resolved';
 
 export interface User {
   id: string;
@@ -105,7 +106,34 @@ export interface AlertEvent {
   latitude: number;
   distanceMeters: number;
   message: string;
+  status: AlertEventStatus;
+  handledBy?: string;
+  handledNote?: string;
+  handledAt?: string;
   createdAt: string;
+}
+
+export interface AlertEventUpdateInput {
+  status?: AlertEventStatus;
+  handledBy?: string;
+  handledNote?: string;
+}
+
+export interface ReportSummary {
+  projectId?: string;
+  generatedAt: string;
+  deviceTotal: number;
+  onlineTotal: number;
+  routeAssignedTotal: number;
+  routeUnassignedTotal: number;
+  alertTotal: number;
+  openAlertTotal: number;
+  acknowledgedAlertTotal: number;
+  resolvedAlertTotal: number;
+  geofenceTotal: number;
+  activeGeofenceTotal: number;
+  routeTotal: number;
+  activeRouteTotal: number;
 }
 
 export interface RoutePointInput {

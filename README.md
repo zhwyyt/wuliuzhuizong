@@ -28,6 +28,8 @@ npm run dev
 - 告警事件查询示例：http://localhost:4000/api/alerts?projectId=p-shanghai
 - 保存路线查询示例：http://localhost:4000/api/routes?projectId=p-shanghai
 - 设备路线分配接口：`PATCH /api/devices/{id}/route`
+- 告警处置接口：`PATCH /api/alerts/{id}`
+- 运营报表接口：http://localhost:4000/api/reports/summary?projectId=p-shanghai
 - 路线偏离检测接口：`POST /api/routes/deviation`
 
 ## PostgreSQL 持久化
@@ -57,8 +59,9 @@ Copy-Item backend/.env.example backend/.env
 - 单项目筛选。
 - 大屏总览页。
 - 基础轨迹回放。
-- 电子围栏创建与告警事件查看。
+- 电子围栏创建、告警事件查看和告警确认/解决。
 - 保存路线走廊、设备路线分配与路线偏离检测。
+- 运营报表聚合：告警状态、路线覆盖、围栏和路线数量。
 - WebSocket 位置更新推送。
 
 ## Android Studio 运行方式
@@ -160,4 +163,4 @@ The current Android app uses AMap location first and falls back to system locati
 - 增加 Web 端围栏/告警管理界面和更完整的权限模型。
 - 接入高德 Web JS API 和 Android 高德定位 SDK。
 - 增加后台保活、定位服务通知和 Android 任务管理。
-- 增加项目成员角色、告警处置流和报表。
+- 增加项目成员角色、告警派单和报表导出。

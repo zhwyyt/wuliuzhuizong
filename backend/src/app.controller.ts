@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { DataService } from './data.service';
-import { Device, DeviceRouteAssignmentInput, GeofenceInput, LocationInput, Project, RouteCorridorInput, RouteDeviationInput } from './domain';
+import { AlertEventUpdateInput, Device, DeviceRouteAssignmentInput, GeofenceInput, LocationInput, Project, RouteCorridorInput, RouteDeviationInput } from './domain';
 import { RealtimeGateway } from './realtime.gateway';
 
 @Controller()
@@ -92,8 +92,13 @@ export class AppController {
   }
 
   @Get('alerts')
-  async alerts(@Query('projectId') projectId?: string, @Query('deviceId') deviceId?: string, @Query('limit') limit?: string) {
-    return this.data.listAlerts({ projectId, deviceId, limit });
+  async alerts(@Query('projectId') projectId?: string, @Query('deviceId') deviceId?: string, @Query('status') status?: string, @Query('limit') limit?: string) {
+    return this.data.listAlerts({ projectId, deviceId, status, limit });
+  }
+
+  @Patch('alerts/:id')
+  async updateAlert(@Param('id') id: string, @Body() body: AlertEventUpdateInput) {
+    return this.data.updateAlert(id, body);
   }
 
   @Post('routes/deviation')
@@ -119,5 +124,10 @@ export class AppController {
   @Get('overview')
   async overview(@Query('projectId') projectId?: string) {
     return this.data.overview(projectId);
+  }
+
+  @Get('reports/summary')
+  async reportSummary(@Query('projectId') projectId?: string) {
+    return this.data.reportSummary(projectId);
   }
 }

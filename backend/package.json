@@ -7,7 +7,7 @@
     "dev": "nest start --watch",
     "build": "nest build",
     "start": "node dist/main.js",
-    "test": "tsc -p tsconfig.spec.json && node --test dist-spec/**/*.spec.js"
+    "test": "tsc -p tsconfig.spec.json && node --test dist-spec/data.service.spec.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.6",

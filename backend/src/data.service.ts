@@ -4,6 +4,8 @@ import { dirname, join } from 'node:path';
 import { Pool } from 'pg';
 import {
   AlertEvent,
+  AlertEventStatus,
+  AlertEventUpdateInput,
   Device,
   DeviceStatus,
   Geofence,
@@ -13,6 +15,7 @@ import {
   LocationPoint,
   NearbyLocation,
   Project,
+  ReportSummary,
   RouteCorridor,
   RouteCorridorInput,
   RouteDeviationInput,
@@ -63,6 +66,7 @@ interface DataState {
 type AlertListInput = {
   projectId?: string;
   deviceId?: string;
+  status?: string;
   limit?: number | string;
 };
 
@@ -142,6 +146,10 @@ type AlertEventRow = {
   latitude: number;
   distance_meters: number;
   message: string;
+  status: AlertEventStatus;
+  handled_by?: string | null;
+  handled_note?: string | null;
+  handled_at?: Date | string | null;
   created_at: Date | string;
 };
 
@@ -215,12 +223,13 @@ export class DataService {
   async listProjects() {
     if (!this.pool) {
       const visibleDevices = this.visibleDevices();
+      const openAlerts = this.alerts.filter((alert) => alert.status === 'open');
       return this.projects
         .map((project) => ({
           ...project,
           deviceCount: visibleDevices.filter((device) => device.projectId === project.id).length,
           onlineCount: visibleDevices.filter((device) => device.projectId === project.id && device.status === 'online').length,
-          alertCount: visibleDevices.filter((device) => device.projectId === project.id && device.status === 'alert').length,
+          alertCount: openAlerts.filter((alert) => alert.projectId === project.id).length,
         }))
         .filter((project) => project.deviceCount > 0);
     }
@@ -235,12 +244,19 @@ export class DataService {
           select 1 from wuliu_locations l where l.device_id = d.id and l.source = 'android'
         )
       )
+      ), open_alerts as (
+        select project_id, count(*)::int as alert_count
+        from wuliu_alert_events
+        where status = 'open'
+        group by project_id
+      )
       select p.id, p.name, p.region, p.description, p.status, p.created_at,
              count(vd.id)::int as device_count,
              count(vd.id) filter (where vd.status = 'online')::int as online_count,
-             count(vd.id) filter (where vd.status = 'alert')::int as alert_count
+             coalesce(max(oa.alert_count), 0)::int as alert_count
       from wuliu_projects p
       join visible_devices vd on vd.project_id = p.id
+      left join open_alerts oa on oa.project_id = p.id
       group by p.id
       order by p.created_at desc
       `,
@@ -691,11 +707,15 @@ export class DataService {
     if (limit <= 0 || limit > 500) {
       throw new BadRequestException('limit must be between 1 and 500');
     }
+    if (input.status) {
+      this.assertAlertStatus(input.status);
+    }
 
     if (!this.pool) {
       return this.alerts
         .filter((event) => !input.projectId || event.projectId === input.projectId)
         .filter((event) => !input.deviceId || event.deviceId === input.deviceId)
+        .filter((event) => !input.status || event.status === input.status)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .slice(0, limit);
     }
@@ -711,6 +731,10 @@ export class DataService {
       params.push(input.deviceId);
       clauses.push(`device_id = $${params.length}`);
     }
+    if (input.status) {
+      params.push(input.status);
+      clauses.push(`status = $${params.length}`);
+    }
     params.push(limit);
     const result = await this.pool.query<AlertEventRow>(
       `
@@ -723,6 +747,45 @@ export class DataService {
       params,
     );
     return result.rows.map((row) => this.alertFromRow(row));
+  }
+
+  async updateAlert(id: string, input: AlertEventUpdateInput): Promise<AlertEvent> {
+    const status = input.status ?? 'acknowledged';
+    this.assertAlertStatus(status);
+    const handledAt = status === 'open' ? undefined : now();
+    const handledBy = status === 'open' ? undefined : (input.handledBy?.trim() || this.users[0]?.name || '调度员');
+    const handledNote = status === 'open' ? undefined : input.handledNote?.trim();
+
+    if (this.pool) {
+      await this.ready;
+      const result = await this.pool.query<AlertEventRow>(
+        `
+        update wuliu_alert_events
+        set status = $2,
+            handled_by = $3,
+            handled_note = $4,
+            handled_at = $5
+        where id = $1
+        returning *
+        `,
+        [id, status, handledBy ?? null, handledNote ?? null, handledAt ?? null],
+      );
+      if (!result.rows[0]) {
+        throw new NotFoundException('Alert event not found');
+      }
+      return this.alertFromRow(result.rows[0]);
+    }
+
+    const alert = this.alerts.find((event) => event.id === id);
+    if (!alert) {
+      throw new NotFoundException('Alert event not found');
+    }
+    alert.status = status;
+    alert.handledBy = handledBy;
+    alert.handledNote = handledNote;
+    alert.handledAt = handledAt;
+    this.saveState();
+    return alert;
   }
 
   async routeDeviation(input: RouteDeviationInput): Promise<RouteDeviationResult> {
@@ -854,14 +917,41 @@ export class DataService {
     const projectIds = new Set(projects.map((project) => project.id));
     const visibleProjects = projectId ? projects.filter((project) => project.id === projectId) : projects;
     const visibleDevices = devices.filter((device) => projectIds.has(device.projectId));
+    const openAlerts = await this.listAlerts({ projectId, status: 'open', limit: 500 });
     return {
       projectTotal: visibleProjects.length,
       deviceTotal: visibleDevices.length,
       onlineTotal: visibleDevices.filter((device) => device.status === 'online').length,
       todayActive: latest.length,
-      alertTotal: visibleDevices.filter((device) => device.status === 'alert').length,
+      alertTotal: openAlerts.length,
       projects: visibleProjects,
       latest,
+    };
+  }
+
+  async reportSummary(projectId?: string): Promise<ReportSummary> {
+    const [devices, alerts, geofences, routes] = await Promise.all([
+      this.listDevices(projectId),
+      this.listAlerts({ projectId, limit: 500 }),
+      this.listGeofences(projectId),
+      this.listRouteCorridors(projectId),
+    ]);
+    const routeAssignedTotal = devices.filter((device) => Boolean(device.routeId)).length;
+    return {
+      projectId,
+      generatedAt: now(),
+      deviceTotal: devices.length,
+      onlineTotal: devices.filter((device) => device.status === 'online').length,
+      routeAssignedTotal,
+      routeUnassignedTotal: devices.length - routeAssignedTotal,
+      alertTotal: alerts.length,
+      openAlertTotal: alerts.filter((alert) => alert.status === 'open').length,
+      acknowledgedAlertTotal: alerts.filter((alert) => alert.status === 'acknowledged').length,
+      resolvedAlertTotal: alerts.filter((alert) => alert.status === 'resolved').length,
+      geofenceTotal: geofences.length,
+      activeGeofenceTotal: geofences.filter((geofence) => geofence.status === 'active').length,
+      routeTotal: routes.length,
+      activeRouteTotal: routes.filter((route) => route.status === 'active').length,
     };
   }
 
@@ -983,8 +1073,24 @@ export class DataService {
         latitude double precision not null,
         distance_meters double precision not null,
         message text not null,
+        status text not null default 'open',
+        handled_by text,
+        handled_note text,
+        handled_at timestamptz,
         created_at timestamptz not null
       );
+
+      alter table wuliu_alert_events
+      add column if not exists status text not null default 'open';
+
+      alter table wuliu_alert_events
+      add column if not exists handled_by text;
+
+      alter table wuliu_alert_events
+      add column if not exists handled_note text;
+
+      alter table wuliu_alert_events
+      add column if not exists handled_at timestamptz;
 
       create table if not exists wuliu_route_corridors (
         id text primary key,
@@ -1004,6 +1110,7 @@ export class DataService {
       create index if not exists idx_wuliu_geofences_project on wuliu_geofences(project_id);
       create index if not exists idx_wuliu_alert_events_project_created on wuliu_alert_events(project_id, created_at desc);
       create index if not exists idx_wuliu_alert_events_device_created on wuliu_alert_events(device_id, created_at desc);
+      create index if not exists idx_wuliu_alert_events_status on wuliu_alert_events(status);
       create index if not exists idx_wuliu_route_corridors_project on wuliu_route_corridors(project_id);
     `;
   }
@@ -1157,7 +1264,7 @@ export class DataService {
       if (Array.isArray(parsed.devices)) this.devices = parsed.devices;
       if (Array.isArray(parsed.locations)) this.locations = parsed.locations;
       if (Array.isArray(parsed.geofences)) this.geofences = parsed.geofences;
-      if (Array.isArray(parsed.alerts)) this.alerts = parsed.alerts;
+      if (Array.isArray(parsed.alerts)) this.alerts = parsed.alerts.map((alert) => ({ ...alert, status: alert.status ?? 'open' }));
       if (Array.isArray(parsed.routeCorridors)) this.routeCorridors = parsed.routeCorridors;
     } catch (error) {
       console.warn(`Could not load persisted data from ${file}:`, error);
@@ -1343,6 +1450,10 @@ export class DataService {
       latitude: Number(row.latitude),
       distanceMeters: Math.round(Number(row.distance_meters)),
       message: row.message,
+      status: row.status ?? 'open',
+      handledBy: row.handled_by ?? undefined,
+      handledNote: row.handled_note ?? undefined,
+      handledAt: toIso(row.handled_at),
       createdAt: toIso(row.created_at) ?? now(),
     };
   }
@@ -1411,6 +1522,7 @@ export class DataService {
       latitude: point.latitude,
       distanceMeters,
       message: `${device.name} entered ${geofence.name}`,
+      status: 'open',
       createdAt: now(),
     };
 
@@ -1419,9 +1531,9 @@ export class DataService {
         `
         insert into wuliu_alert_events (
           id, type, project_id, device_id, location_id, geofence_id, geofence_name,
-          longitude, latitude, distance_meters, message, created_at
+          longitude, latitude, distance_meters, message, status, created_at
         ) values (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
         )
         on conflict (id) do nothing
         `,
@@ -1437,6 +1549,7 @@ export class DataService {
           event.latitude,
           event.distanceMeters,
           event.message,
+          event.status,
           event.createdAt,
         ],
       );
@@ -1444,6 +1557,7 @@ export class DataService {
     }
 
     this.alerts.unshift(event);
+    this.saveState();
     return event;
   }
 
@@ -1511,6 +1625,12 @@ export class DataService {
       throw new BadRequestException('route corridor is paused');
     }
     return corridor.route.map((point) => ({ longitude: point.longitude, latitude: point.latitude }));
+  }
+
+  private assertAlertStatus(status: string): asserts status is AlertEventStatus {
+    if (!['open', 'acknowledged', 'resolved'].includes(status)) {
+      throw new BadRequestException('status must be open, acknowledged, or resolved');
+    }
   }
 
   private toRouteDeviationResult(

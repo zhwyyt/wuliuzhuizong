@@ -38,6 +38,8 @@ export const api = {
     const query = params.toString();
     return request(`/alerts${query ? `?${query}` : ''}`);
   },
+  updateAlert: (alertId, input) => request(`/alerts/${alertId}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  reportSummary: (projectId) => request(`/reports/summary${projectId ? `?projectId=${projectId}` : ''}`),
   routeDeviation: (input) => request('/routes/deviation', { method: 'POST', body: JSON.stringify(input) }),
 };
 

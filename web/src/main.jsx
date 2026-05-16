@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { io } from 'socket.io-client';
-import { Activity, AlertTriangle, BarChart3, Building2, Crosshair, LocateFixed, LogIn, MapPin, MonitorUp, Plus, Radio, Route, ShieldCheck, Smartphone } from 'lucide-react';
+import { Activity, AlertTriangle, BarChart3, Building2, CheckCircle2, Crosshair, LocateFixed, LogIn, MapPin, MonitorUp, Plus, Radio, Route, ShieldCheck, Smartphone } from 'lucide-react';
 import { api, realtimeUrl } from './api/client';
 import './styles.css';
 
@@ -14,6 +14,12 @@ const statusText = {
   idle: '空闲',
   offline: '离线',
   alert: '异常',
+};
+
+const alertStatusText = {
+  open: '待处理',
+  acknowledged: '已确认',
+  resolved: '已解决',
 };
 
 function Stat({ label, value, tone = 'default' }) {
@@ -165,7 +171,7 @@ function Login({ onLogin }) {
   );
 }
 
-function ConsolePage({ data, selectedProject, setSelectedProject, onRefresh }) {
+function ConsolePage({ user, data, selectedProject, setSelectedProject, onRefresh }) {
   const [projectForm, setProjectForm] = useState({ name: '', region: '', description: '' });
   const [deviceForm, setDeviceForm] = useState({ name: '', owner: '', phone: '' });
   const [geofenceForm, setGeofenceForm] = useState({ name: '', longitude: '120.1569', latitude: '30.7964', radiusMeters: '1000' });
@@ -241,6 +247,15 @@ function ConsolePage({ data, selectedProject, setSelectedProject, onRefresh }) {
     const deviceId = trackDevice || filteredDevices[0]?.id || data.devices[0]?.id;
     if (!deviceId) return;
     await api.assignDeviceRoute(deviceId, selectedRouteId || null);
+    onRefresh();
+  }
+
+  async function handleAlert(alertId, status) {
+    await api.updateAlert(alertId, {
+      status,
+      handledBy: user?.name || '调度员',
+      handledNote: status === 'resolved' ? '现场状态已恢复' : '已联系设备人员',
+    });
     onRefresh();
   }
 
@@ -357,9 +372,24 @@ function ConsolePage({ data, selectedProject, setSelectedProject, onRefresh }) {
             <div key={alert.id} className="alert-row">
               <strong>{alert.geofenceName}</strong>
               <span>{alert.deviceId}</span>
+              <span className={`alert-status alert-status-${alert.status}`}>{alertStatusText[alert.status] || alert.status}</span>
               <em>{alert.distanceMeters}m</em>
+              {alert.status === 'open' && <button type="button" onClick={() => handleAlert(alert.id, 'acknowledged')}><CheckCircle2 size={15} /> 确认</button>}
+              {alert.status !== 'resolved' && <button type="button" onClick={() => handleAlert(alert.id, 'resolved')}><ShieldCheck size={15} /> 解决</button>}
             </div>
           )) : <p className="muted">暂无告警事件。</p>}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-title"><h2><BarChart3 size={20} /> 运营报表</h2></div>
+        <div className="report-grid">
+          <Stat label="待处理告警" value={data.summary.openAlertTotal ?? 0} tone="bad" />
+          <Stat label="已确认" value={data.summary.acknowledgedAlertTotal ?? 0} />
+          <Stat label="已解决" value={data.summary.resolvedAlertTotal ?? 0} tone="good" />
+          <Stat label="路线覆盖" value={`${data.summary.routeAssignedTotal ?? 0}/${data.summary.deviceTotal ?? 0}`} />
+          <Stat label="电子围栏" value={data.summary.activeGeofenceTotal ?? 0} />
+          <Stat label="保存路线" value={data.summary.activeRouteTotal ?? 0} />
         </div>
       </section>
 
@@ -425,7 +455,7 @@ function ScreenPage({ data, selectedProject, setSelectedProject }) {
         <Stat label="项目总数" value={data.overview.projectTotal} />
         <Stat label="在线人数" value={data.overview.onlineTotal} tone="good" />
         <Stat label="今日活跃" value={data.overview.todayActive} />
-        <Stat label="异常数量" value={data.overview.alertTotal} tone="bad" />
+        <Stat label="待处理告警" value={data.summary.openAlertTotal ?? data.overview.alertTotal} tone="bad" />
       </div>
       <div className="screen-layout">
         <MiniMap points={data.overview.latest || []} selectedProject={selectedProject} />
@@ -451,12 +481,12 @@ function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('console');
   const [selectedProject, setSelectedProject] = useState('');
-  const [data, setData] = useState({ projects: [], devices: [], latest: [], overview: {}, geofences: [], alerts: [], routes: [] });
+  const [data, setData] = useState({ projects: [], devices: [], latest: [], overview: {}, geofences: [], alerts: [], routes: [], summary: {} });
   const [error, setError] = useState('');
 
   const refresh = useCallback(async (projectId = selectedProject) => {
     try {
-      const [projects, devices, latest, overview, geofences, alerts, routes] = await Promise.all([
+      const [projects, devices, latest, overview, geofences, alerts, routes, summary] = await Promise.all([
         api.projects(),
         api.devices(),
         api.latest(projectId),
@@ -464,8 +494,9 @@ function App() {
         api.geofences(projectId),
         api.alerts({ projectId, limit: 50 }),
         api.routes(projectId),
+        api.reportSummary(projectId),
       ]);
-      setData({ projects, devices, latest, overview, geofences, alerts, routes });
+      setData({ projects, devices, latest, overview, geofences, alerts, routes, summary });
       setError('');
     } catch (err) {
       setError(err.message);
@@ -507,7 +538,7 @@ function App() {
       <main className="workspace">
         {error && <div className="error"><AlertTriangle size={16} /> {error}</div>}
         {view === 'console' ? (
-          <ConsolePage data={data} selectedProject={selectedProject} setSelectedProject={setSelectedProject} onRefresh={() => refresh()} />
+          <ConsolePage user={user} data={data} selectedProject={selectedProject} setSelectedProject={setSelectedProject} onRefresh={() => refresh()} />
         ) : (
           <ScreenPage data={data} selectedProject={selectedProject} setSelectedProject={setSelectedProject} />
         )}
