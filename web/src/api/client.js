@@ -12,12 +12,12 @@ export function setAuthToken(token) {
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
+    ...options,
     headers: {
       'Content-Type': 'application/json',
       ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       ...(options.headers || {}),
     },
-    ...options,
   });
 
   if (!response.ok) {
