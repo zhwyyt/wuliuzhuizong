@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client';
 import { io } from 'socket.io-client';
 import { Activity, AlertTriangle, BarChart3, Building2, CheckCircle2, Crosshair, Download, LocateFixed, LogIn, MapPin, MonitorUp, Plus, Radio, Route, ShieldCheck, Smartphone, Users } from 'lucide-react';
-import { api, realtimeUrl } from './api/client';
+import { api, realtimeUrl, setAuthToken } from './api/client';
 import './styles.css';
 
 const AMAP_KEY = import.meta.env.VITE_AMAP_KEY || '';
@@ -374,6 +374,7 @@ function ConsolePage({ user, data, selectedProject, setSelectedProject, onRefres
               <span>{device.owner}</span>
               <strong>{device.name}</strong>
               <span>{device.routeId ? routeNameById.get(device.routeId) || '已分配路线' : '未分配路线'}</span>
+              <span>{device.deviceToken ? `凭证 ${device.deviceToken.slice(0, 12)}` : '无凭证'}</span>
               <em className={`badge badge-${device.status}`}>{statusText[device.status]}</em>
             </button>
           ))}
@@ -584,6 +585,7 @@ function App() {
 
   async function login(name) {
     const result = await api.login(name);
+    setAuthToken(result.token);
     setUser(result.user);
   }
 

@@ -1,10 +1,49 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { DataService } from './data.service';
+
+test('login issues session tokens and maps project members to scoped operators', async () => {
+  const service = new DataService();
+
+  const admin = await service.login('控制台管理员');
+  assert.match(admin.token, /^session-/);
+  assert.equal(service.authenticate(`Bearer ${admin.token}`).role, 'admin');
+
+  const member = await service.login('上海调度员');
+  assert.equal(member.user.role, 'operator');
+  assert.deepEqual(member.user.projectIds, ['p-shanghai']);
+  assert.equal(service.authenticate(member.token).name, '上海调度员');
+  assert.throws(() => service.authenticate('bad-token'), UnauthorizedException);
+});
+
+test('Android device uploads require the matching device token when requested', async () => {
+  const service = new DataService();
+  const device = await service.createDevice({ projectId: 'p-shanghai', name: '凭证测试设备' });
+
+  await assert.rejects(
+    () => service.ingestLocation({
+      projectId: 'p-shanghai',
+      deviceId: device.id,
+      longitude: 121.47,
+      latitude: 31.23,
+      appVersion: '0.2.0',
+    }, { requireDeviceToken: true, deviceToken: 'wrong-token' }),
+    UnauthorizedException,
+  );
+
+  const point = await service.ingestLocation({
+    projectId: 'p-shanghai',
+    deviceId: device.id,
+    longitude: 121.47,
+    latitude: 31.23,
+    appVersion: '0.2.0',
+  }, { requireDeviceToken: true, deviceToken: device.deviceToken });
+  assert.equal(point.deviceId, device.id);
+});
 
 test('ingestLocation accepts longitude and latitude fields from Android clients', async () => {
   const service = new DataService();

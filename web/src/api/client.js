@@ -1,9 +1,20 @@
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000/api';
+let authToken = localStorage.getItem('wuliu-auth-token') || '';
+
+export function setAuthToken(token) {
+  authToken = token || '';
+  if (authToken) {
+    localStorage.setItem('wuliu-auth-token', authToken);
+  } else {
+    localStorage.removeItem('wuliu-auth-token');
+  }
+}
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
     headers: {
       'Content-Type': 'application/json',
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       ...(options.headers || {}),
     },
     ...options,
@@ -16,7 +27,7 @@ async function request(path, options = {}) {
 }
 
 export const api = {
-  login: (name) => request('/auth/login', { method: 'POST', body: JSON.stringify({ name }) }),
+  login: (name) => request('/auth/login', { method: 'POST', body: JSON.stringify({ name }), headers: {} }),
   projects: () => request('/projects'),
   createProject: (project) => request('/projects', { method: 'POST', body: JSON.stringify(project) }),
   members: (projectId) => request(`/members${projectId ? `?projectId=${projectId}` : ''}`),
@@ -42,7 +53,13 @@ export const api = {
   },
   updateAlert: (alertId, input) => request(`/alerts/${alertId}`, { method: 'PATCH', body: JSON.stringify(input) }),
   reportSummary: (projectId) => request(`/reports/summary${projectId ? `?projectId=${projectId}` : ''}`),
-  reportExportUrl: (projectId) => `${API_BASE}/reports/export${projectId ? `?projectId=${projectId}` : ''}`,
+  reportExportUrl: (projectId) => {
+    const params = new URLSearchParams();
+    if (projectId) params.set('projectId', projectId);
+    if (authToken) params.set('token', authToken);
+    const query = params.toString();
+    return `${API_BASE}/reports/export${query ? `?${query}` : ''}`;
+  },
   routeDeviation: (input) => request('/routes/deviation', { method: 'POST', body: JSON.stringify(input) }),
 };
 

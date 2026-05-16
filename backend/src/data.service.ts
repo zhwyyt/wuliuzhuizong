@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { Pool } from 'pg';
@@ -6,6 +7,7 @@ import {
   AlertEvent,
   AlertEventStatus,
   AlertEventUpdateInput,
+  AuthResult,
   Device,
   DeviceStatus,
   Geofence,
@@ -67,6 +69,12 @@ interface DataState {
   routeCorridors: RouteCorridor[];
 }
 
+type AuthSession = {
+  token: string;
+  user: User;
+  expiresAt: string;
+};
+
 type AlertListInput = {
   projectId?: string;
   deviceId?: string;
@@ -104,6 +112,7 @@ type DeviceRow = {
   status: DeviceStatus;
   last_seen_at?: Date | string | null;
   route_id?: string | null;
+  device_token?: string | null;
 };
 
 type LocationRow = {
@@ -218,6 +227,7 @@ export class DataService {
   private geofences: Geofence[] = [];
   private alerts: AlertEvent[] = [];
   private routeCorridors: RouteCorridor[] = [];
+  private sessions = new Map<string, AuthSession>();
 
   constructor() {
     if (this.shouldUsePostgres()) {
@@ -228,19 +238,64 @@ export class DataService {
     this.saveState();
   }
 
-  async login(name?: string): Promise<User> {
-    const user = { ...this.users[0], name: name?.trim() || this.users[0].name };
-    this.users[0] = user;
+  async login(name?: string): Promise<AuthResult> {
+    const loginName = name?.trim();
+    let matchedMembers = loginName ? this.members.filter((member) => member.name === loginName) : [];
+    if (this.pool && loginName) {
+      await this.ready;
+      const result = await this.pool.query<ProjectMemberRow>('select * from wuliu_project_members where name = $1', [loginName]);
+      matchedMembers = result.rows.map((row) => this.memberFromRow(row));
+    }
+    const user: User = matchedMembers.length
+      ? {
+          id: `u-member-${matchedMembers[0].id}`,
+          name: matchedMembers[0].name,
+          role: 'operator',
+          projectIds: [...new Set(matchedMembers.map((member) => member.projectId))],
+        }
+      : { ...this.users[0], name: loginName || this.users[0].name, projectIds: undefined };
+    if (user.role === 'admin') {
+      this.users[0] = user;
+    }
     if (this.pool) {
       await this.ready;
       await this.pool.query(
         'insert into wuliu_users (id, name, role) values ($1, $2, $3) on conflict (id) do update set name = excluded.name, role = excluded.role',
         [user.id, user.name, user.role],
       );
-    } else {
+    } else if (user.role === 'admin') {
       this.saveState();
     }
-    return user;
+    const token = `session-${randomUUID()}`;
+    this.sessions.set(token, {
+      token,
+      user,
+      expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
+    });
+    return { token, user };
+  }
+
+  authenticate(token?: string): User {
+    const normalized = token?.replace(/^Bearer\s+/i, '').trim();
+    if (!normalized) {
+      throw new UnauthorizedException('Missing authorization token');
+    }
+    const session = this.sessions.get(normalized);
+    if (!session || Date.parse(session.expiresAt) <= Date.now()) {
+      if (session) this.sessions.delete(normalized);
+      throw new UnauthorizedException('Invalid or expired authorization token');
+    }
+    return session.user;
+  }
+
+  verifyDeviceToken(device: Device, token?: string): void {
+    const expected = device.deviceToken?.trim();
+    if (!expected) {
+      return;
+    }
+    if (!token?.trim() || token.trim() !== expected) {
+      throw new UnauthorizedException('Invalid device token');
+    }
   }
 
   async listProjects() {
@@ -400,13 +455,14 @@ export class DataService {
       phone: input.phone?.trim() || '',
       status: input.status ?? 'offline',
       routeId: input.routeId,
+      deviceToken: input.deviceToken?.trim() || `device-${randomUUID()}`,
     };
 
     if (this.pool) {
       await this.ready;
       const result = await this.pool.query<DeviceRow>(
-        'insert into wuliu_devices (id, project_id, name, type, owner, phone, status, route_id) values ($1, $2, $3, $4, $5, $6, $7, $8) returning *',
-        [device.id, device.projectId, device.name, device.type, device.owner, device.phone, device.status, device.routeId ?? null],
+        'insert into wuliu_devices (id, project_id, name, type, owner, phone, status, route_id, device_token) values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning *',
+        [device.id, device.projectId, device.name, device.type, device.owner, device.phone, device.status, device.routeId ?? null, device.deviceToken],
       );
       return this.deviceFromRow(result.rows[0]);
     }
@@ -440,8 +496,11 @@ export class DataService {
     return device;
   }
 
-  async ingestLocation(input: LocationInput): Promise<LatestLocation> {
+  async ingestLocation(input: LocationInput, options: { deviceToken?: string; requireDeviceToken?: boolean } = {}): Promise<LatestLocation> {
     const device = await this.resolveIngestDevice(input);
+    if (options.requireDeviceToken) {
+      this.verifyDeviceToken(device, options.deviceToken ?? input.deviceToken);
+    }
     if (input.projectId && input.projectId !== device.projectId) {
       throw new BadRequestException('projectId does not match device project');
     }
@@ -1136,11 +1195,15 @@ export class DataService {
         phone text not null default '',
         status text not null,
         last_seen_at timestamptz,
-        route_id text
+        route_id text,
+        device_token text
       );
 
       alter table wuliu_devices
       add column if not exists route_id text;
+
+      alter table wuliu_devices
+      add column if not exists device_token text;
 
       create table if not exists wuliu_locations (
         id text primary key,
@@ -1294,11 +1357,11 @@ export class DataService {
     for (const device of this.devices) {
       await this.pool.query(
         `
-        insert into wuliu_devices (id, project_id, name, type, owner, phone, status, last_seen_at)
-        values ($1, $2, $3, $4, $5, $6, $7, $8)
+        insert into wuliu_devices (id, project_id, name, type, owner, phone, status, last_seen_at, device_token)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         on conflict (id) do nothing
         `,
-        [device.id, device.projectId, device.name, device.type, device.owner, device.phone, device.status, device.lastSeenAt],
+        [device.id, device.projectId, device.name, device.type, device.owner, device.phone, device.status, device.lastSeenAt, device.deviceToken ?? null],
       );
     }
   }
@@ -1328,10 +1391,11 @@ export class DataService {
         owner: input.owner?.trim() || 'Android 采集端',
         phone: input.phone?.trim() || '',
         status: input.status ?? 'online',
+        deviceToken: input.deviceToken?.trim() || `device-${randomUUID()}`,
       };
       const inserted = await this.pool.query<DeviceRow>(
-        'insert into wuliu_devices (id, project_id, name, type, owner, phone, status) values ($1, $2, $3, $4, $5, $6, $7) returning *',
-        [device.id, device.projectId, device.name, device.type, device.owner, device.phone, device.status],
+        'insert into wuliu_devices (id, project_id, name, type, owner, phone, status, device_token) values ($1, $2, $3, $4, $5, $6, $7, $8) returning *',
+        [device.id, device.projectId, device.name, device.type, device.owner, device.phone, device.status, device.deviceToken],
       );
       return this.deviceFromRow(inserted.rows[0]);
     }
@@ -1350,6 +1414,7 @@ export class DataService {
       owner: input.owner?.trim() || 'Android 采集端',
       phone: input.phone?.trim() || '',
       status: input.status ?? 'online',
+      deviceToken: input.deviceToken?.trim() || `device-${randomUUID()}`,
     };
     this.devices.unshift(device);
     this.saveState();
@@ -1479,6 +1544,7 @@ export class DataService {
       status: row.status,
       lastSeenAt: toIso(row.last_seen_at),
       routeId: row.route_id ?? undefined,
+      deviceToken: row.device_token ?? undefined,
     };
   }
 

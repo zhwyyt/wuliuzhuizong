@@ -256,7 +256,7 @@ textarea {
 }
 
 .device-row {
-  grid-template-columns: 0.7fr 1fr minmax(96px, 0.8fr) auto;
+  grid-template-columns: 0.7fr 1fr minmax(96px, 0.8fr) minmax(120px, 0.8fr) auto;
 }
 
 .member-row {

@@ -38,4 +38,5 @@
 - [x] Add route assignment workflow for devices and projects.
 - [x] Add alert acknowledgement workflow and reporting aggregates.
 - [x] Add project member roles, alert dispatch ownership, and exportable reports.
-- [ ] Add real authentication, project permissions, and device upload credentials.
+- [x] Add real authentication, project permissions, and device upload credentials.
+- [ ] Tighten per-resource permission checks for route/device/alert mutations.

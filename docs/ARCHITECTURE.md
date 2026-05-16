@@ -12,9 +12,9 @@ The MVP is a project-based GPS monitoring system. Android phones are treated as 
 
 ## Core Domain
 
-- User: simplified operator account for MVP login.
+- User: session-backed admin/operator account. Project members can log in as scoped operators.
 - Project: logistics or field operation unit.
-- Device: mobile phone or tracker assigned to one project.
+- Device: mobile phone or tracker assigned to one project, with an upload credential for Android reports.
 - Location point: longitude, latitude, speed, heading, timestamp, and status.
 
 ## API Strategy
@@ -55,6 +55,7 @@ REST is the default API style:
 - Saved route corridors, device route assignments, and route deviation checks.
 - Alert acknowledgement/resolution and operations summary reporting.
 - Project member roles, alert dispatch ownership, and CSV report export.
+- Session authorization for management APIs and device-token authorization for Android upload.
 - Simulated App upload.
 
 WebSocket namespace:
@@ -79,6 +80,8 @@ Spatial query API:
 - Android uploads generate `geofence_enter` alert events when a point falls inside an active circle geofence.
 - Alert events carry `open`, `acknowledged`, or `resolved` status plus handling operator, note, and timestamp.
 - Project members carry owner/manager/dispatcher/viewer roles and can be assigned as alert owners.
+- Login returns an expiring `session-*` bearer token. Admin users can access all projects; member logins are scoped to their project IDs.
+- Android uploads can be protected with per-device `deviceToken` credentials. New devices receive a generated credential.
 - Saved route corridors are stored in `wuliu_route_corridors` with JSON route points and a project index.
 - Devices can store an optional `route_id` assignment; assigned route projects must match the device project.
 - `POST /api/routes/deviation` compares a device track against an inline route polyline, a saved `routeId`, or the device assigned route, and reports points outside the configured tolerance.
@@ -86,7 +89,6 @@ Spatial query API:
 
 The next persistence upgrade is to expand spatial business logic:
 
-- Add real authentication, project permissions, and device upload credentials.
 - Index by `device_id`, `project_id`, and timestamp.
 - Use spatial indexes for route corridor checks and large-screen aggregation.
 

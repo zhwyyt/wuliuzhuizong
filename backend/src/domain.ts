@@ -10,6 +10,12 @@ export interface User {
   id: string;
   name: string;
   role: 'admin' | 'operator';
+  projectIds?: string[];
+}
+
+export interface AuthResult {
+  token: string;
+  user: User;
 }
 
 export interface Project {
@@ -49,6 +55,7 @@ export interface Device {
   status: DeviceStatus;
   lastSeenAt?: string;
   routeId?: string;
+  deviceToken?: string;
 }
 
 export interface DeviceRouteAssignmentInput {
@@ -226,4 +233,5 @@ export interface LocationInput {
   status?: DeviceStatus;
   capturedAt?: string;
   timestamp?: string;
+  deviceToken?: string;
 }
