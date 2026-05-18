@@ -42,6 +42,6 @@
 - [x] Tighten per-resource permission checks for route/device/alert mutations.
 - [x] Upgrade Android app with login, project loading, device binding, and saved upload credentials.
 - [x] Add Android foreground tracking service for background location upload.
-- [x] Refactor Android app into clear step-by-step login, member confirmation, device binding, tracking, and navigation screens.
-- [ ] Run physical Android field test over LAN/Tailscale.
-- [ ] Connect Web dispatch destinations to the Android navigation screen.
+- [x] Refactor Android app into a designed login page, workspace dashboard, and single collection module flow.
+- [x] Run physical Android field test over LAN/Tailscale.
+- [ ] Decide whether to expand the Android workspace with more modules after collection is stable.

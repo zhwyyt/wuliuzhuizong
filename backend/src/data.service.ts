@@ -61,7 +61,7 @@ type NearbyInput = {
 interface DataState {
   users: User[];
   projects: Project[];
-  members: ProjectMember[];
+  members: ProjectMemberRecord[];
   devices: Device[];
   locations: LocationPoint[];
   geofences: Geofence[];
@@ -99,7 +99,12 @@ type ProjectMemberRow = {
   name: string;
   role: ProjectMemberRole;
   phone: string;
+  password?: string | null;
   created_at: Date | string;
+};
+
+type ProjectMemberRecord = ProjectMember & {
+  password: string;
 };
 
 type DeviceRow = {
@@ -202,10 +207,10 @@ export class DataService {
     { id: 'p-suzhou', name: '苏州仓配项目', region: '苏州', description: '仓配一体化演示项目', status: 'paused', createdAt: now() },
   ];
 
-  private members: ProjectMember[] = [
-    { id: 'm-sh-admin', projectId: 'p-shanghai', name: '上海项目经理', role: 'manager', phone: '13900001001', createdAt: now() },
-    { id: 'm-sh-dispatch', projectId: 'p-shanghai', name: '上海调度员', role: 'dispatcher', phone: '13900001002', createdAt: now() },
-    { id: 'm-hz-dispatch', projectId: 'p-hangzhou', name: '杭州调度员', role: 'dispatcher', phone: '13900002001', createdAt: now() },
+  private members: ProjectMemberRecord[] = [
+    { id: 'm-sh-admin', projectId: 'p-shanghai', name: '上海项目经理', role: 'manager', phone: '13900001001', password: '123456', createdAt: now() },
+    { id: 'm-sh-dispatch', projectId: 'p-shanghai', name: '上海调度员', role: 'dispatcher', phone: '13900001002', password: '123456', createdAt: now() },
+    { id: 'm-hz-dispatch', projectId: 'p-hangzhou', name: '杭州调度员', role: 'dispatcher', phone: '13900002001', password: '123456', createdAt: now() },
   ];
 
   private devices: Device[] = [
@@ -238,22 +243,44 @@ export class DataService {
     this.saveState();
   }
 
-  async login(name?: string): Promise<AuthResult> {
-    const loginName = name?.trim();
-    let matchedMembers = loginName ? this.members.filter((member) => member.name === loginName) : [];
-    if (this.pool && loginName) {
-      await this.ready;
-      const result = await this.pool.query<ProjectMemberRow>('select * from wuliu_project_members where name = $1', [loginName]);
-      matchedMembers = result.rows.map((row) => this.memberFromRow(row));
+  async login(credentials: { name?: string; phone?: string; password?: string } = {}): Promise<AuthResult> {
+    const loginName = credentials.name?.trim();
+    const loginPhone = credentials.phone?.trim();
+    const loginPassword = credentials.password?.trim();
+    let matchedMembers: ProjectMemberRecord[] = [];
+
+    if (loginPhone) {
+      matchedMembers = this.members.filter((member) => member.phone === loginPhone);
+      if (this.pool) {
+        await this.ready;
+        const result = await this.pool.query<ProjectMemberRow>('select * from wuliu_project_members where phone = $1', [loginPhone]);
+        matchedMembers = result.rows.map((row) => this.memberRecordFromRow(row));
+      }
+      matchedMembers = matchedMembers.filter((member) => member.password === (loginPassword || ''));
+      if (!matchedMembers.length) {
+        throw new UnauthorizedException('Invalid phone or password');
+      }
+    } else if (loginName) {
+      matchedMembers = this.members.filter((member) => member.name === loginName);
+      if (this.pool) {
+        await this.ready;
+        const result = await this.pool.query<ProjectMemberRow>('select * from wuliu_project_members where name = $1', [loginName]);
+        matchedMembers = result.rows.map((row) => this.memberRecordFromRow(row));
+      }
     }
+
+    const projects = matchedMembers.length ? await this.projectsByIds([...new Set(matchedMembers.map((member) => member.projectId))]) : undefined;
+    const primaryMember = matchedMembers[0];
     const user: User = matchedMembers.length
       ? {
-          id: `u-member-${matchedMembers[0].id}`,
-          name: matchedMembers[0].name,
+          id: loginPhone ? `u-phone-${loginPhone}` : `u-member-${primaryMember.id}`,
+          name: primaryMember.name,
           role: 'operator',
-          projectIds: [...new Set(matchedMembers.map((member) => member.projectId))],
+          projectIds: projects?.map((project) => project.id) ?? [...new Set(matchedMembers.map((member) => member.projectId))],
+          phone: primaryMember.phone,
+          memberId: primaryMember.id,
         }
-      : { ...this.users[0], name: loginName || this.users[0].name, projectIds: undefined };
+      : { ...this.users[0], name: loginName || this.users[0].name, projectIds: undefined, phone: undefined, memberId: undefined };
     if (user.role === 'admin') {
       this.users[0] = user;
     }
@@ -272,7 +299,12 @@ export class DataService {
       user,
       expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
     });
-    return { token, user };
+    return {
+      token,
+      user,
+      projects,
+      member: primaryMember ? this.toProjectMember(primaryMember) : undefined,
+    };
   }
 
   authenticate(token?: string): User {
@@ -296,6 +328,21 @@ export class DataService {
     if (!token?.trim() || token.trim() !== expected) {
       throw new UnauthorizedException('Invalid device token');
     }
+  }
+
+  private async projectsByIds(projectIds: string[]): Promise<Project[]> {
+    if (!projectIds.length) {
+      return [];
+    }
+    if (!this.pool) {
+      return this.projects.filter((project) => projectIds.includes(project.id));
+    }
+    await this.ready;
+    const result = await this.pool.query<ProjectRow>(
+      'select * from wuliu_projects where id = any($1::text[]) order by created_at desc',
+      [projectIds],
+    );
+    return result.rows.map((row) => this.projectFromRow(row));
   }
 
   async listProjects() {
@@ -385,7 +432,8 @@ export class DataService {
 
     return this.members
       .filter((member) => !projectId || member.projectId === projectId)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((member) => this.toProjectMember(member));
   }
 
   async createMember(input: ProjectMemberInput): Promise<ProjectMember> {
@@ -395,29 +443,47 @@ export class DataService {
     if (!name) {
       throw new BadRequestException('name is required');
     }
+    const phone = input.phone?.trim();
+    if (!phone) {
+      throw new BadRequestException('phone is required');
+    }
     const role = input.role ?? 'dispatcher';
     this.assertMemberRole(role);
-    const member: ProjectMember = {
+
+    if (this.pool) {
+      await this.ready;
+      const existing = await this.pool.query<ProjectMemberRow>(
+        'select * from wuliu_project_members where project_id = $1 and phone = $2 limit 1',
+        [projectId, phone],
+      );
+      if (existing.rows[0]) {
+        throw new BadRequestException('member phone already exists in project');
+      }
+    } else if (this.members.some((member) => member.projectId === projectId && member.phone === phone)) {
+      throw new BadRequestException('member phone already exists in project');
+    }
+
+    const member: ProjectMemberRecord = {
       id: `m-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
       projectId,
       name,
       role,
-      phone: input.phone?.trim() || '',
+      phone,
+      password: input.password?.trim() || '123456',
       createdAt: now(),
     };
 
     if (this.pool) {
-      await this.ready;
       const result = await this.pool.query<ProjectMemberRow>(
-        'insert into wuliu_project_members (id, project_id, name, role, phone, created_at) values ($1, $2, $3, $4, $5, $6) returning *',
-        [member.id, member.projectId, member.name, member.role, member.phone, member.createdAt],
+        'insert into wuliu_project_members (id, project_id, name, role, phone, password, created_at) values ($1, $2, $3, $4, $5, $6, $7) returning *',
+        [member.id, member.projectId, member.name, member.role, member.phone, member.password, member.createdAt],
       );
       return this.memberFromRow(result.rows[0]);
     }
 
     this.members.unshift(member);
     this.saveState();
-    return member;
+    return this.toProjectMember(member);
   }
 
   async listDevices(projectId?: string): Promise<Device[]> {
@@ -1182,8 +1248,12 @@ export class DataService {
         name text not null,
         role text not null,
         phone text not null default '',
+        password text not null default '123456',
         created_at timestamptz not null
       );
+
+      alter table wuliu_project_members
+      add column if not exists password text not null default '123456';
 
       create table if not exists wuliu_devices (
         id text primary key,
@@ -1293,6 +1363,7 @@ export class DataService {
       create index if not exists idx_wuliu_locations_project_timestamp on wuliu_locations(project_id, timestamp desc);
       create index if not exists idx_wuliu_locations_source on wuliu_locations(source);
       create index if not exists idx_wuliu_project_members_project on wuliu_project_members(project_id);
+      create index if not exists idx_wuliu_project_members_phone on wuliu_project_members(phone);
       create index if not exists idx_wuliu_devices_project on wuliu_devices(project_id);
       create index if not exists idx_wuliu_devices_route on wuliu_devices(route_id);
       create index if not exists idx_wuliu_geofences_project on wuliu_geofences(project_id);
@@ -1349,8 +1420,8 @@ export class DataService {
     }
     for (const member of this.members) {
       await this.pool.query(
-        'insert into wuliu_project_members (id, project_id, name, role, phone, created_at) values ($1, $2, $3, $4, $5, $6) on conflict (id) do nothing',
-        [member.id, member.projectId, member.name, member.role, member.phone, member.createdAt],
+        'insert into wuliu_project_members (id, project_id, name, role, phone, password, created_at) values ($1, $2, $3, $4, $5, $6, $7) on conflict (id) do nothing',
+        [member.id, member.projectId, member.name, member.role, member.phone, member.password, member.createdAt],
       );
     }
     for (const device of this.devices) {
@@ -1458,7 +1529,7 @@ export class DataService {
       const parsed = JSON.parse(readFileSync(file, 'utf8')) as Partial<DataState>;
       if (Array.isArray(parsed.users)) this.users = parsed.users;
       if (Array.isArray(parsed.projects)) this.projects = parsed.projects;
-      if (Array.isArray(parsed.members)) this.members = parsed.members;
+      if (Array.isArray(parsed.members)) this.members = parsed.members.map((member) => this.normalizeMemberRecord(member));
       if (Array.isArray(parsed.devices)) this.devices = parsed.devices;
       if (Array.isArray(parsed.locations)) this.locations = parsed.locations;
       if (Array.isArray(parsed.geofences)) this.geofences = parsed.geofences;
@@ -1522,13 +1593,41 @@ export class DataService {
   }
 
   private memberFromRow(row: ProjectMemberRow): ProjectMember {
+    return this.toProjectMember(this.memberRecordFromRow(row));
+  }
+
+  private memberRecordFromRow(row: ProjectMemberRow): ProjectMemberRecord {
     return {
       id: row.id,
       projectId: row.project_id,
       name: row.name,
       role: row.role,
       phone: row.phone,
+      password: row.password ?? '123456',
       createdAt: toIso(row.created_at) ?? now(),
+    };
+  }
+
+  private toProjectMember(member: ProjectMemberRecord): ProjectMember {
+    return {
+      id: member.id,
+      projectId: member.projectId,
+      name: member.name,
+      role: member.role,
+      phone: member.phone,
+      createdAt: member.createdAt,
+    };
+  }
+
+  private normalizeMemberRecord(member: Partial<ProjectMemberRecord>): ProjectMemberRecord {
+    return {
+      id: member.id ?? `m-${Date.now().toString(36)}`,
+      projectId: member.projectId ?? this.projects[0]?.id ?? '',
+      name: member.name ?? '未命名成员',
+      role: member.role ?? 'dispatcher',
+      phone: member.phone ?? '',
+      password: member.password ?? '123456',
+      createdAt: member.createdAt ?? now(),
     };
   }
 
