@@ -43,6 +43,8 @@ Superpowers MVP plan is complete. Phase 7 productionization has started with loc
 - Added session token login, scoped project-member permissions, and device upload token validation.
 - Upgraded the Android app to login, load scoped projects, register/bind the phone as a device, save the returned device credential, and send `X-Device-Token` on uploads.
 - Added Android foreground tracking service with a persistent notification and 30-second background location upload loop.
+- Refactored the Android app into a five-step flow: login, project/member confirmation, phone binding, tracking, and optional navigation handoff.
+- Aligned Android identity with Web-managed project members so the phone no longer invents local member ownership.
 - Added local JSON persistence fallback at `backend/data/runtime.json`; tests continue to use memory-only state.
 - Verified PostgreSQL connection to the configured `wms` database and API location ingest/latest-location smoke checks.
 - Started local dev services successfully with backend on `http://localhost:4000/api` and Web on `http://127.0.0.1:5175`.
@@ -61,7 +63,9 @@ Superpowers MVP plan is complete. Phase 7 productionization has started with loc
 - 高德地图 production usage requires a valid API key configured by the deployer.
 - In-app browser verification timed out repeatedly in the current shell; frontend was verified by independent Playwright, build, lint, dev server HTTP 200, and backend smoke checks.
 - Android background tracking has compile-time verification; a physical-phone long-running battery/permission test is still needed before production use.
+- Android navigation is currently a handoff to external map apps using manually entered destination coordinates; task-driven destination sync is still pending.
 
 ## Next Steps
 
 - Run a physical Android phone field test over LAN/Tailscale to confirm permission prompts, foreground-service notification behavior, and live map updates.
+- Add destination handoff from Web dispatch tasks into the Android navigation page.

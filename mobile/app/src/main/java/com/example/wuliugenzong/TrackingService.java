@@ -67,7 +67,8 @@ public class TrackingService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        startForeground(NOTIFICATION_ID, notification("物流跟踪后台上报中"));
+        String projectName = prefs.getString("projectName", "未选择项目");
+        startForeground(NOTIFICATION_ID, notification(projectName + " 后台上报中"));
         return START_STICKY;
     }
 
@@ -134,8 +135,8 @@ public class TrackingService extends Service {
         body.put("projectId", prefs.getString("projectId", ""));
         body.put("deviceId", prefs.getString("deviceId", ""));
         body.put("deviceName", prefs.getString("deviceName", ""));
-        body.put("owner", prefs.getString("owner", ""));
-        body.put("phone", prefs.getString("phone", ""));
+        body.put("owner", prefs.getString("memberName", ""));
+        body.put("phone", prefs.getString("memberPhone", ""));
         body.put("longitude", location.getLongitude());
         body.put("latitude", location.getLatitude());
         body.put("speed", Math.max(0, location.getSpeed() * 3.6));

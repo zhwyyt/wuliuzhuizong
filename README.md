@@ -55,7 +55,7 @@ Copy-Item backend/.env.example backend/.env
 - 会话 token 登录、项目成员范围权限和设备上报凭证。
 - 项目列表、新建项目、按项目查看。
 - 人员/设备列表、绑定设备。
-- Android App 登录、项目选择、本机设备绑定和凭证化位置上报。
+- Android App 分步骤登录、项目成员确认、本机设备绑定、后台定位上报和辅助导航。
 - Web 实时位置展示。
 - 所有项目实时分布。
 - 单项目筛选。
@@ -73,9 +73,11 @@ Copy-Item backend/.env.example backend/.env
 2. 等待 Gradle Sync 完成。
 3. 启动后端服务。
 4. 模拟器默认后端地址使用 `http://10.0.2.2:4000/api`；真机调试时把 App 内后端地址改为电脑局域网 IP 或 Tailscale IP，例如 `http://192.168.1.10:4000/api` 或 `http://100.101.3.116:4000/api`。
-5. 输入演示账号，例如 `上海调度员`，点击“登录并加载项目”。
-6. 选择项目，填写本机设备名称、人员姓名和手机号，点击“注册/绑定本机设备”。App 会保存后端返回的设备 ID 和 `deviceToken`。
-7. 点击“开始后台定位上报”。App 会以前台服务运行，并每 30 秒向后端上报一次真实定位；“立即上报一次”可用于现场验证。
+5. 第 1 步输入演示账号，例如 `上海调度员`，点击“登录并加载项目”。
+6. 第 2 步选择项目并加载 Web 项目成员，确认这台手机代表哪个成员上报定位。
+7. 第 3 步填写本机设备名称，点击“绑定本机设备”。App 会保存后端返回的设备 ID 和 `deviceToken`。
+8. 第 4 步点击“开始后台定位上报”。App 会以前台服务运行，并每 30 秒向后端上报一次真实定位；“立即上报一次”可用于现场验证。
+9. 第 5 步可选：输入目的地经纬度，唤起高德地图或系统地图导航。
 
 ## Android Studio Verification
 
@@ -86,7 +88,8 @@ Use these default values for emulator testing:
 - Backend address: `http://10.0.2.2:4000/api`
 - Login account: `上海调度员`
 - Project: select `上海冷链配送`
-- Device: create/bind from the app, then reuse the saved device credential
+- Member: load from Web project members and confirm `上海调度员`
+- Device: bind from the app, then reuse the saved device credential
 
 For a physical Android phone on the same LAN or Tailscale network, replace `10.0.2.2` with the computer's LAN/Tailscale IP address and keep port `4000`.
 
@@ -102,7 +105,7 @@ Before using the APK on a phone, open this health check in the phone browser:
 http://100.101.3.116:4000/api/health
 ```
 
-If the health check opens, the APK can login, bind a device, and upload locations to the local backend through Tailscale.
+If the health check opens, the APK can login, confirm a Web-managed project member, bind a device, and upload locations to the local backend through Tailscale.
 
 ## AMap Key
 
@@ -133,7 +136,7 @@ Then open `mobile/` in Android Studio and run Gradle Sync. The Android debug pac
 com.example.wuliugenzong
 ```
 
-The current Android app uses AMap location first in the foreground UI and falls back to system location if AMap is unavailable. Background reporting runs as an Android foreground service with a persistent notification and no longer uploads demo coordinates.
+The current Android app uses a five-step flow: login, choose project/member, bind the phone, start tracking, and optionally open navigation. It uses AMap location first in the foreground UI and falls back to system location if AMap is unavailable. Background reporting runs as an Android foreground service with a persistent notification and no longer uploads demo coordinates.
 
 ## 目录结构
 
@@ -151,6 +154,7 @@ The current Android app uses AMap location first in the foreground UI and falls 
 - 地图以坐标画布展示实时点和轨迹，保留高德地图接入边界。
 - 权限模型为演示登录，后续需要接入真实账号、角色和项目权限。
 - Android 后台采集使用前台服务和 30 秒固定上报间隔；生产环境还需要按厂商系统补充保活、电量策略和合规弹窗。
+- Android 端成员归属完全依赖 Web 管理端配置；手机端只确认身份，不在本地创建项目成员。
 
 ## 已验证
 
@@ -160,7 +164,7 @@ The current Android app uses AMap location first in the foreground UI and falls 
 - 后端 API smoke check：`/health`、`/projects`、`/locations/latest`、`POST /locations`、`/devices/d-1001/track`、`/overview`
 - Web dev server HTTP 200：`http://127.0.0.1:5175`
 - Android Gradle `assembleDebug`
-- Android 采集端编译验证：登录/项目加载、设备绑定、设备凭证保存、前台服务后台上报代码路径已接入。
+- Android 采集端编译验证：五步界面流程、项目成员确认、设备绑定、设备凭证保存、前台服务后台上报和导航唤起代码路径已接入。
 - PostgreSQL/PostGIS 模式 API smoke check：自动建库/建表、位置上报、最新位置查询、附近设备查询、电子围栏查询、围栏告警事件、保存路线走廊、设备路线分配、路线偏离检测
 
 测试环境会自动使用内存仓库；如果本地临时需要禁用落盘，可以设置 `WULIU_DATA_FILE=memory`。
@@ -168,5 +172,6 @@ The current Android app uses AMap location first in the foreground UI and falls 
 ## 下一阶段建议
 
 - 增加 Android 端项目任务、签到、司机状态和轨迹补传队列。
+- 打通 Web 任务单到手机导航页的目的地下发，减少手输经纬度。
 - 增加更完整的生产账号体系、审计日志和设备凭证轮换。
 - 按目标手机品牌补充后台保活、电量白名单指引和异常恢复策略。
