@@ -36,6 +36,10 @@ public class TrackingService extends Service {
     private static final String CHANNEL_ID = "wuliu_tracking";
     private static final int NOTIFICATION_ID = 3001;
     private static final String PREFS = "wuliu-mobile";
+    private static final String KEY_TRACKING_RUNNING = "trackingRunning";
+    private static final String KEY_SERVICE_STATUS = "serviceStatus";
+    private static final String KEY_LAST_LOCATION_TEXT = "lastLocationText";
+    private static final String KEY_LAST_UPLOAD_TEXT = "lastUploadText";
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
@@ -61,6 +65,7 @@ public class TrackingService extends Service {
         locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
         createChannel();
         startForeground(NOTIFICATION_ID, notification("正在准备定位上报"));
+        rememberStatus(true, "正在准备定位上报");
         startLocationUpdates();
         handler.post(uploadLoop);
     }
@@ -69,6 +74,7 @@ public class TrackingService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         String projectName = prefs.getString("projectName", "未选择项目");
         startForeground(NOTIFICATION_ID, notification(projectName + " 后台上报中"));
+        rememberStatus(true, projectName + " 后台上报中");
         return START_STICKY;
     }
 
@@ -78,6 +84,7 @@ public class TrackingService extends Service {
         if (locationManager != null) {
             locationManager.removeUpdates(locationListener);
         }
+        prefs.edit().putBoolean(KEY_TRACKING_RUNNING, false).putString(KEY_SERVICE_STATUS, "后台采集已停止。").apply();
         super.onDestroy();
     }
 
@@ -107,6 +114,7 @@ public class TrackingService extends Service {
             return;
         }
         lastLocation = location;
+        prefs.edit().putString(KEY_LAST_LOCATION_TEXT, "最新定位：" + trim(location.getLongitude()) + ", " + trim(location.getLatitude())).apply();
         updateNotification("最新定位 " + trim(location.getLongitude()) + ", " + trim(location.getLatitude()));
     };
 
@@ -123,6 +131,7 @@ public class TrackingService extends Service {
         new Thread(() -> {
             try {
                 int code = postLocation(location);
+                prefs.edit().putString(KEY_LAST_UPLOAD_TEXT, "最近上报：" + nowText() + " / HTTP " + code).apply();
                 updateNotification("上报完成 HTTP " + code + " " + trim(location.getLongitude()) + ", " + trim(location.getLatitude()));
             } catch (Exception ex) {
                 updateNotification("上报失败：" + ex.getMessage());
@@ -200,6 +209,14 @@ public class TrackingService extends Service {
     private void updateNotification(String text) {
         NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         manager.notify(NOTIFICATION_ID, notification(text));
+        rememberStatus(true, text);
+    }
+
+    private void rememberStatus(boolean running, String text) {
+        prefs.edit()
+                .putBoolean(KEY_TRACKING_RUNNING, running)
+                .putString(KEY_SERVICE_STATUS, text)
+                .apply();
     }
 
     private boolean isMockLocation(Location location) {
@@ -217,6 +234,10 @@ public class TrackingService extends Service {
 
     private String trim(double value) {
         return String.format(Locale.US, "%.6f", value);
+    }
+
+    private String nowText() {
+        return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.CHINA).format(new Date());
     }
 
     private void readBody(InputStream stream) throws Exception {

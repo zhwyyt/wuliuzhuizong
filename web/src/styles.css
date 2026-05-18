@@ -234,6 +234,10 @@ textarea {
   grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
 }
 
+.member-form {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+}
+
 .device-list, .track-list, .fence-list, .alert-list, .member-list {
   display: grid;
   gap: 8px;
@@ -269,6 +273,19 @@ textarea {
 
 .device-row span, .track-row span, .fence-row span, .alert-row span, .member-row span, .muted {
   color: #677781;
+}
+
+.form-note {
+  margin: 10px 0 0;
+  font-size: 14px;
+}
+
+.form-note-success {
+  color: #0f7660;
+}
+
+.form-note-error {
+  color: #b42318;
 }
 
 .badge, .track-row em, .fence-row em, .alert-row em, .member-row em, .route-result em, .alert-status {
@@ -490,6 +507,14 @@ textarea {
 
   .screen-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .member-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .member-form button {
+    grid-column: span 2;
   }
 }
 

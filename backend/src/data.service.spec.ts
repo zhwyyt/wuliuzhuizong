@@ -12,15 +12,45 @@ const realtimeStub = { publishLocation() {} };
 test('login issues session tokens and maps project members to scoped operators', async () => {
   const service = new DataService();
 
-  const admin = await service.login('控制台管理员');
+  const admin = await service.login({ name: '控制台管理员' });
   assert.match(admin.token, /^session-/);
   assert.equal(service.authenticate(`Bearer ${admin.token}`).role, 'admin');
 
-  const member = await service.login('上海调度员');
+  const member = await service.login({ name: '上海调度员' });
   assert.equal(member.user.role, 'operator');
   assert.deepEqual(member.user.projectIds, ['p-shanghai']);
   assert.equal(service.authenticate(member.token).name, '上海调度员');
   assert.throws(() => service.authenticate('bad-token'), UnauthorizedException);
+});
+
+test('phone login authenticates members with password and returns assigned projects', async () => {
+  const service = new DataService();
+
+  const login = await service.login({ phone: '13900001002', password: '123456' });
+  assert.equal(login.user.role, 'operator');
+  assert.equal(login.user.phone, '13900001002');
+  assert.equal(login.member?.name, '上海调度员');
+  assert.deepEqual(login.projects?.map((project) => project.id), ['p-shanghai']);
+
+  await assert.rejects(
+    () => service.login({ phone: '13900001002', password: 'bad-pass' }),
+    UnauthorizedException,
+  );
+});
+
+test('createMember rejects duplicate phones inside the same project', async () => {
+  const service = new DataService();
+
+  await assert.rejects(
+    () => service.createMember({
+      projectId: 'p-shanghai',
+      name: '重复手机号成员',
+      role: 'dispatcher',
+      phone: '13900001002',
+      password: '123456',
+    }),
+    BadRequestException,
+  );
 });
 
 test('Android device uploads require the matching device token when requested', async () => {

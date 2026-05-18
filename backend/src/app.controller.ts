@@ -16,8 +16,8 @@ export class AppController {
   }
 
   @Post('auth/login')
-  async login(@Body() body: { name?: string }) {
-    return this.data.login(body.name);
+  async login(@Body() body: { name?: string; phone?: string; password?: string }) {
+    return this.data.login(body);
   }
 
   @Get('projects')

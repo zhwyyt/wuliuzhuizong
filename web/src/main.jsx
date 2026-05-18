@@ -178,9 +178,11 @@ function Login({ onLogin }) {
   );
 }
 
-function ConsolePage({ user, data, selectedProject, setSelectedProject, onRefresh }) {
+function ConsolePage({ user, data, selectedProject, setSelectedProject, onRefresh, onMemberCreated }) {
   const [projectForm, setProjectForm] = useState({ name: '', region: '', description: '' });
-  const [memberForm, setMemberForm] = useState({ name: '', role: 'dispatcher', phone: '' });
+  const [memberForm, setMemberForm] = useState({ name: '', role: 'dispatcher', phone: '', password: '123456' });
+  const [memberFeedback, setMemberFeedback] = useState('');
+  const [memberFeedbackTone, setMemberFeedbackTone] = useState('muted');
   const [deviceForm, setDeviceForm] = useState({ name: '', owner: '', phone: '' });
   const [geofenceForm, setGeofenceForm] = useState({ name: '', longitude: '120.1569', latitude: '30.7964', radiusMeters: '1000' });
   const [trackDevice, setTrackDevice] = useState('d-1001');
@@ -215,9 +217,18 @@ function ConsolePage({ user, data, selectedProject, setSelectedProject, onRefres
 
   async function addMember(event) {
     event.preventDefault();
-    await api.createMember({ ...memberForm, projectId: selectedProject || data.projects[0]?.id });
-    setMemberForm({ name: '', role: 'dispatcher', phone: '' });
-    onRefresh();
+    setMemberFeedback('');
+    try {
+      const member = await api.createMember({ ...memberForm, projectId: selectedProject || data.projects[0]?.id });
+      onMemberCreated(member);
+      setMemberForm({ name: '', role: 'dispatcher', phone: '', password: '123456' });
+      await onRefresh();
+      setMemberFeedbackTone('success');
+      setMemberFeedback(`已添加 ${member.name}，Android App 可用手机号 ${member.phone} 登录。`);
+    } catch (err) {
+      setMemberFeedbackTone('error');
+      setMemberFeedback(err.message);
+    }
   }
 
   async function addGeofence(event) {
@@ -353,7 +364,7 @@ function ConsolePage({ user, data, selectedProject, setSelectedProject, onRefres
             </div>
           )) : <p className="muted">暂无项目成员。</p>}
         </div>
-        <form className="inline-form" onSubmit={addMember}>
+        <form className="inline-form member-form" onSubmit={addMember}>
           <input placeholder="姓名" value={memberForm.name} onChange={(e) => setMemberForm({ ...memberForm, name: e.target.value })} />
           <select value={memberForm.role} onChange={(e) => setMemberForm({ ...memberForm, role: e.target.value })}>
             <option value="dispatcher">调度</option>
@@ -362,8 +373,11 @@ function ConsolePage({ user, data, selectedProject, setSelectedProject, onRefres
             <option value="viewer">观察</option>
           </select>
           <input placeholder="手机号" value={memberForm.phone} onChange={(e) => setMemberForm({ ...memberForm, phone: e.target.value })} />
+          <input placeholder="登录密码" value={memberForm.password} onChange={(e) => setMemberForm({ ...memberForm, password: e.target.value })} />
           <button><Plus size={16} /> 添加</button>
         </form>
+        {memberFeedback ? <p className={`form-note form-note-${memberFeedbackTone}`}>{memberFeedback}</p> : null}
+        <p className="muted">成员账号用于 Android App 登录，手机号即登录账号；未改动时默认密码是 `123456`。</p>
       </section>
 
       <section className="panel">
@@ -568,6 +582,13 @@ function App() {
     }
   }, [selectedProject]);
 
+  const mergeMember = useCallback((member) => {
+    setData((current) => ({
+      ...current,
+      members: [member, ...current.members.filter((item) => item.id !== member.id)],
+    }));
+  }, []);
+
   useEffect(() => {
     if (user) refresh();
   }, [refresh, user]);
@@ -604,7 +625,7 @@ function App() {
       <main className="workspace">
         {error && <div className="error"><AlertTriangle size={16} /> {error}</div>}
         {view === 'console' ? (
-          <ConsolePage user={user} data={data} selectedProject={selectedProject} setSelectedProject={setSelectedProject} onRefresh={() => refresh()} />
+          <ConsolePage user={user} data={data} selectedProject={selectedProject} setSelectedProject={setSelectedProject} onRefresh={() => refresh()} onMemberCreated={mergeMember} />
         ) : (
           <ScreenPage data={data} selectedProject={selectedProject} setSelectedProject={setSelectedProject} />
         )}

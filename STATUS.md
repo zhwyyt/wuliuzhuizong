@@ -41,13 +41,14 @@ Superpowers MVP plan is complete. Phase 7 productionization has started with loc
 - Added alert acknowledgement/resolution with `PATCH /api/alerts/:id` and operations summary reporting at `GET /api/reports/summary`.
 - Added project member roles, alert dispatch ownership, and CSV report export at `GET /api/reports/export`.
 - Added session token login, scoped project-member permissions, and device upload token validation.
-- Upgraded the Android app to login, load scoped projects, register/bind the phone as a device, save the returned device credential, and send `X-Device-Token` on uploads.
+- Upgraded the Android app to phone/password login, auto-bind the phone as a device after login, save the returned device credential, and send `X-Device-Token` on uploads.
 - Added Android foreground tracking service with a persistent notification and 30-second background location upload loop.
-- Refactored the Android app into a five-step flow: login, project/member confirmation, phone binding, tracking, and optional navigation handoff.
-- Aligned Android identity with Web-managed project members so the phone no longer invents local member ownership.
+- Refactored the Android app into a PDA-style experience with a dedicated login page, workspace dashboard, and a single live collection module.
+- Aligned Android identity with Web-managed project members so the phone no longer invents local member ownership; Web now pre-configures member phone/password accounts for App login.
 - Added local JSON persistence fallback at `backend/data/runtime.json`; tests continue to use memory-only state.
 - Verified PostgreSQL connection to the configured `wms` database and API location ingest/latest-location smoke checks.
 - Started local dev services successfully with backend on `http://localhost:4000/api` and Web on `http://127.0.0.1:5175`.
+- Verified the Android flow on a physical phone, including phone login, automatic device binding, and live location uploads.
 
 ## In Progress
 
@@ -62,10 +63,8 @@ Superpowers MVP plan is complete. Phase 7 productionization has started with loc
 - Current local PostgreSQL storage keeps scalar longitude/latitude columns and a PostGIS geography column/index for spatial queries.
 - 高德地图 production usage requires a valid API key configured by the deployer.
 - In-app browser verification timed out repeatedly in the current shell; frontend was verified by independent Playwright, build, lint, dev server HTTP 200, and backend smoke checks.
-- Android background tracking has compile-time verification; a physical-phone long-running battery/permission test is still needed before production use.
-- Android navigation is currently a handoff to external map apps using manually entered destination coordinates; task-driven destination sync is still pending.
+- Android background tracking is verified on a physical phone, but a longer soak test across OEM battery policies is still worth doing before wider rollout.
 
 ## Next Steps
 
-- Run a physical Android phone field test over LAN/Tailscale to confirm permission prompts, foreground-service notification behavior, and live map updates.
-- Add destination handoff from Web dispatch tasks into the Android navigation page.
+- Decide whether the Android workspace should later expose more modules beyond the current collection entry.

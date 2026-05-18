@@ -11,11 +11,15 @@ export interface User {
   name: string;
   role: 'admin' | 'operator';
   projectIds?: string[];
+  phone?: string;
+  memberId?: string;
 }
 
 export interface AuthResult {
   token: string;
   user: User;
+  projects?: Project[];
+  member?: ProjectMember;
 }
 
 export interface Project {
@@ -43,6 +47,7 @@ export interface ProjectMemberInput {
   name?: string;
   role?: ProjectMemberRole;
   phone?: string;
+  password?: string;
 }
 
 export interface Device {
